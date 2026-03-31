@@ -18,8 +18,6 @@ mock_secrets.DB = {
     "password": "test_pass",
     "port": "5432"
 }
-mock_secrets.OWN_CHAT_ID = 12345
-mock_secrets.PRIVILEGED_USERS = [12345]
 mock_secrets.WORKDIR = "/tmp/"
 sys.modules['hermes_utils.secrets'] = mock_secrets
 

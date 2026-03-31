@@ -2,6 +2,54 @@ from hermes_utils.db import get_user_lang
 from hermes_utils.meta import LOVE_EMOJI
 
 _STRINGS = {
+    "welcome": {
+        "en": """Welcome to Hermes!
+
+Hermes scrapes 20+ Dutch rental websites every 5 minutes and sends you Telegram notifications for new listings that match your filters.
+
+Use /register to request access. Once approved, you'll start receiving updates automatically.
+
+For more information: /info
+GitHub: https://github.com/xenbyte/hermes""",
+        "nl": """Welkom bij Hermes!
+
+Hermes scrapet meer dan 20 Nederlandse huurwebsites elke 5 minuten en stuurt je Telegram-meldingen voor nieuwe woningen die overeenkomen met je filters.
+
+Gebruik /register om toegang aan te vragen. Na goedkeuring ontvang je automatisch updates.
+
+Meer informatie: /info
+GitHub: https://github.com/xenbyte/hermes"""
+    },
+
+    "info": {
+        "en": """About Hermes
+
+Hermes is an open-source rental listing aggregator for the Dutch housing market. It monitors 20+ websites including Funda, Pararius, Vesteda, and social housing platforms (Woningnet), notifying you within minutes of a matching listing.
+
+Features:
+- Notifications within 5 minutes of a new listing
+- Filters for city, price range, minimum size, and agency
+- AI-powered listing analysis with scoring and motivation letters
+- Web dashboard for filter management
+- English and Dutch support
+
+Want to run your own instance? Hermes is open-source and free to self-host (BYOK — bring your own keys):
+https://github.com/xenbyte/hermes""",
+        "nl": """Over Hermes
+
+Hermes is een open-source huurwoningenmonitor voor de Nederlandse woningmarkt. Het monitort meer dan 20 websites waaronder Funda, Pararius, Vesteda en Woningnet-platforms, en stuurt je binnen enkele minuten een melding bij een passende woning.
+
+Functies:
+- Meldingen binnen 5 minuten na een nieuwe plaatsing
+- Filters voor stad, prijsbereik, minimale oppervlakte en makelaar
+- AI-analyse met scores en motivatiebrieven
+- Webdashboard voor filterbeheer
+- Ondersteuning voor Engels en Nederlands
+
+Wil je je eigen instantie draaien? Hermes is open-source en gratis te hosten (BYOK — bring your own keys):
+https://github.com/xenbyte/hermes"""
+    },
+
     "start": {
         "en": r"""Hi there\!
 
@@ -232,6 +280,14 @@ Succes met je zoektocht\!"""
         "en": "Your access request has been received. You'll be notified when you are approved.",
         "nl": "Je aanvraag is ontvangen. Je krijgt een bericht zodra je bent goedgekeurd."
     },
+    "register_pending": {
+        "en": "Your access request is still being reviewed. We'll notify you as soon as you're approved.",
+        "nl": "Je aanvraag wordt nog beoordeeld. We laten je weten zodra je bent goedgekeurd."
+    },
+    "register_already": {
+        "en": "You're already registered! Use /help to see what I can do for you.",
+        "nl": "Je bent al geregistreerd! Gebruik /help om te zien wat ik voor je kan doen."
+    },
     "approved_notification": {
         "en": "Your access has been approved! Use /help to see what I can do for you.",
         "nl": "Je toegang is goedgekeurd! Gebruik /help om te zien wat ik voor je kan doen."
@@ -243,9 +299,10 @@ Succes met je zoektocht\!"""
 
     "help": {
         "en": """*I can do the following for you:*
-/start - Start receiving updates
+/register - Request access or reactivate your subscription
 /stop - Stop receiving updates
-/faq - Show the frequently asked questions (and answers!)
+/info - About Hermes and self-hosting
+/faq - Frequently asked questions
 
 /filter - Show and modify your personal filters
 /websites - Show info about the websites Hermes checks
@@ -256,9 +313,10 @@ Succes met je zoektocht\!"""
 /en - Use Hermes in English
     """,
     "nl": """*Dit kan ik voor je doen:*
-/start - Start het ontvangen van meldingen
+/register - Toegang aanvragen of abonnement heractiveren
 /stop - Stop het ontvangen van meldingen
-/faq - Bekijk de veelgestelde vragen (en antwoorden!)
+/info - Over Hermes en zelf hosten
+/faq - Veelgestelde vragen
 
 /filter - Bekijk en wijzig je persoonlijke filters
 /websites - Bekijk welke websites Hermes checkt

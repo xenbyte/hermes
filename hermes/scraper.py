@@ -91,7 +91,8 @@ async def _record_target_error(target: dict, exc: BaseException) -> None:
     except BaseException as db_error:
         fallback_error = f"Failed to persist error rollup for target {target.get('id')}: {repr(db_error)}"
         logger.error(fallback_error)
-        await meta.BOT.send_message(text=fallback_error, chat_id=secrets.OWN_CHAT_ID)
+        for admin in db.fetch_all("SELECT telegram_id FROM hermes.subscribers WHERE user_level = 9 AND telegram_enabled = true"):
+            await meta.BOT.send_message(text=fallback_error, chat_id=admin["telegram_id"])
 
 
 async def main() -> None:
@@ -115,7 +116,8 @@ async def main() -> None:
         db.cleanup_error_rollups(retention_days=30)
             
         if message:
-            await meta.BOT.send_message(text=message[2:], chat_id=secrets.OWN_CHAT_ID)
+            for admin in db.fetch_all("SELECT telegram_id FROM hermes.subscribers WHERE user_level = 9 AND telegram_enabled = true"):
+                await meta.BOT.send_message(text=message[2:], chat_id=admin["telegram_id"])
 
     # Once a week, Friday 6pm UTC, send all who subscribed three weeks ago a thanks with a donation link reminder
     if datetime.now().weekday() == 4 and datetime.now().hour == 18 and datetime.now().minute < 4:

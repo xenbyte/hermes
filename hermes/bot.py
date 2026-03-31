@@ -74,37 +74,44 @@ def requires_approval(func):
     return wrapper
 
 
-async def new_sub(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, reenable: bool = False) -> None:
-    if not update.effective_chat: return
-    name = await get_sub_name(update, context)
-    logger.info("New subscriber: %s (chat_id=%s)", name, update.effective_chat.id)
-    
-    if reenable:
-        db.enable_user(update.effective_chat.id)
-        await context.bot.send_message(update.effective_chat.id, strings.get("start"), parse_mode="MarkdownV2")
-    else:
-        db.add_user(update.effective_chat.id)
-        await context.bot.send_message(update.effective_chat.id, strings.get("pending_approval", update.effective_chat.id))
-
-
 async def start(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat: return
     logger.debug("/start from chat_id=%s", update.effective_chat.id)
-    checksub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
-    
-    payload = context.args[0] if context.args else None
-    if checksub:
-        if not checksub.get("approved"):
-            await context.bot.send_message(update.effective_chat.id, strings.get("pending_approval", update.effective_chat.id))
-        elif checksub["telegram_enabled"] and not payload:
-            await context.bot.send_message(update.effective_chat.id, strings.get("already_subscribed", update.effective_chat.id))
-        elif not payload:
-            await new_sub(update, context, reenable=True)
-    else:
-        await new_sub(update, context)
+    await context.bot.send_message(update.effective_chat.id, strings.get("welcome", update.effective_chat.id), disable_web_page_preview=True)
 
-    if payload and payload.startswith("hermes-web-link-") and checksub and checksub.get("approved"):
-        await link(update, context, payload[16:])
+    # Handle deep-link payload for web account linking (Telegram always uses /start for these)
+    payload = context.args[0] if context.args else None
+    if payload and payload.startswith("hermes-web-link-"):
+        checksub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
+        if checksub and checksub.get("approved"):
+            await link(update, context, payload[16:])
+
+
+async def register(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat: return
+    logger.debug("/register from chat_id=%s", update.effective_chat.id)
+    checksub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
+
+    if not checksub:
+        name = await get_sub_name(update, context)
+        logger.info("New subscriber: %s (chat_id=%s)", name, update.effective_chat.id)
+        db.add_user(update.effective_chat.id)
+        await context.bot.send_message(update.effective_chat.id, strings.get("pending_approval", update.effective_chat.id))
+    elif not checksub.get("approved"):
+        await context.bot.send_message(update.effective_chat.id, strings.get("register_pending", update.effective_chat.id))
+    elif checksub["telegram_enabled"]:
+        await context.bot.send_message(update.effective_chat.id, strings.get("register_already", update.effective_chat.id))
+    else:
+        # Approved but previously stopped — re-enable
+        name = await get_sub_name(update, context)
+        logger.info("Re-enabled subscriber: %s (chat_id=%s)", name, update.effective_chat.id)
+        db.enable_user(update.effective_chat.id)
+        await context.bot.send_message(update.effective_chat.id, strings.get("start", update.effective_chat.id), parse_mode="MarkdownV2")
+
+
+async def info(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat: return
+    await context.bot.send_message(update.effective_chat.id, strings.get("info", update.effective_chat.id), disable_web_page_preview=True)
 
 
 @requires_approval
@@ -656,6 +663,8 @@ if __name__ == '__main__':
     initialize()
     application = ApplicationBuilder().token(secrets.TOKEN).build()
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("register", register))
+    application.add_handler(CommandHandler("info", info))
     application.add_handler(CommandHandler("stop", stop))
     application.add_handler(CommandHandler("announce", announce))
     application.add_handler(CommandHandler("websites", websites))

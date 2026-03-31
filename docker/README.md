@@ -19,8 +19,6 @@ Edit the file and set:
 
 | Field | Description |
 |-------|-------------|
-| `OWN_CHAT_ID` | Your personal Telegram chat ID (integer). Send `/start` to [@userinfobot](https://t.me/userinfobot) to find it. |
-| `PRIVILEGED_USERS` | List of Telegram user IDs that can use admin commands (`/status`, `/halt`, `/announce`, etc.) |
 | `TOKEN` | Your Telegram bot token from BotFather |
 | `DB` | Database credentials — defaults match the Docker Compose setup, no changes needed for local deployment |
 
@@ -106,7 +104,7 @@ You should see five services:
 
 ### Admin commands
 
-Users listed in `PRIVILEGED_USERS` (in `secrets.py`) with `user_level = 9` in the database can use:
+Users with `user_level = 9` in the database can use:
 
 | Command | Description |
 |---------|-------------|
