@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-bot
+  namespace: hermes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hermes-bot
+  template:
+    metadata:
+      labels:
+        app: hermes-bot
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: bot
+          image: ghcr.io/xenbyte/hermes-bot:latest
+          imagePullPolicy: Always
+          env:
+            - name: LOG_LEVEL
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-env
+                  key: LOG_LEVEL
+          volumeMounts:
+            - name: secrets-py
+              mountPath: /bot/hermes/hermes_utils/secrets.py
+              subPath: secrets.py
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          workingDir: /bot/hermes
+      volumes:
+        - name: secrets-py
+          secret:
+            secretName: hermes-secrets-py
+        - name: data
+          emptyDir: {}

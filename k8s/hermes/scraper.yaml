@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-scraper
+  namespace: hermes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hermes-scraper
+  template:
+    metadata:
+      labels:
+        app: hermes-scraper
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: scraper
+          image: ghcr.io/xenbyte/hermes-scraper:latest
+          imagePullPolicy: Always
+          env:
+            - name: LOG_LEVEL
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-env
+                  key: LOG_LEVEL
+          volumeMounts:
+            - name: secrets-py
+              mountPath: /scraper/hermes/hermes_utils/secrets.py
+              subPath: secrets.py
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: secrets-py
+          secret:
+            secretName: hermes-secrets-py
+        - name: data
+          emptyDir: {}
