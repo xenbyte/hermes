@@ -41,8 +41,8 @@ Je kunt eventueel [een biertje voor me kopen]({{}}) als Hestia je heeft geholpen
         "nl": "Naam: {}\nWebsite: {}\n\n"
     },
     "source_code": {
-        "en": "If you want more information about how I work, I'm open-source: https://github.com/wtfloris/hestia",
-        "nl": "Als je meer informatie wilt over hoe ik in elkaar zit, ik ben open-source: https://github.com/wtfloris/hestia"
+        "en": "If you want more information about how I work, I'm open-source: https://github.com/xenbyte/hestia",
+        "nl": "Als je meer informatie wilt over hoe ik in elkaar zit, ik ben open-source: https://github.com/xenbyte/hestia"
     },
 
     "filter" : {
@@ -162,10 +162,10 @@ Succes met je zoektocht\!"""
     Every 5 minutes\.
 
 *Can you add website \.\.\.?*
-    Probably, please check [this issue](https://github.com/wtfloris/hestia/issues/53) on GitHub to see if it's already on the list\.
+    Probably, please check [this issue](https://github.com/xenbyte/hestia/issues/53) on GitHub to see if it's already on the list\.
 
 *Can you add a filter for: amount of rooms/postal code, etc\.?*
-    In short: no, because it makes Hestia less reliable\. Please see [this comment](https://github.com/wtfloris/hestia/issues/55#issuecomment-2453400778) for the full explanation \(and feel free to discuss if you don\'t agree\)\!
+    In short: no, because it makes Hestia less reliable\. Please see [this comment](https://github.com/xenbyte/hestia/issues/55#issuecomment-2453400778) for the full explanation \(and feel free to discuss if you don\'t agree\)\!
 
 *Does this work if I want to buy a home?*
     Not yet, but who knows what I might build when I\'m looking to buy something myself\!
@@ -192,10 +192,10 @@ Succes met je zoektocht\!"""
     Elke 5 minuten\.
 
 *Kun je website \.\.\. toevoegen?*
-    Waarschijnlijk wel, kijk op GitHub bij [dit issue](https://github.com/wtfloris/hestia/issues/53) om te zien of de website al op de lijst staat\.
+    Waarschijnlijk wel, kijk op GitHub bij [dit issue](https://github.com/xenbyte/hestia/issues/53) om te zien of de website al op de lijst staat\.
 
 *Kun je een filter toevoegen voor: aantal kamers/postcode, etc\.?*
-    Kort gezegd: nee, omdat dit Hestia minder stabiel maakt\. Zie [deze opmerking](https://github.com/wtfloris/hestia/issues/55#issuecomment-2453400778) voor de volledige uitleg \(en voel je vrij om te discussiëren als je het er niet mee eens bent\)\!
+    Kort gezegd: nee, omdat dit Hestia minder stabiel maakt\. Zie [deze opmerking](https://github.com/xenbyte/hestia/issues/55#issuecomment-2453400778) voor de volledige uitleg \(en voel je vrij om te discussiëren als je het er niet mee eens bent\)\!
 
 *Werkt dit ook als ik een huis wil kopen?*
     Nog niet, maar wie weet wat ik ga bouwen als ik zelf iets wil kopen\!
