@@ -16,6 +16,30 @@ playground.*
 
 web/local_testing
 
+# macOS
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+
+# Private keys and certificates (e.g. APNS)
+*.pem
+*.p8
+*.p12
+*.key
+*.crt
+*.cer
+
+# .env variants
+.env.local
+.env.*.local
+.env.development
+.env.staging
+.env.production
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
