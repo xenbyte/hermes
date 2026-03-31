@@ -14,6 +14,7 @@ import hestia_utils.meta as meta
 import hestia_utils.secrets as secrets
 import hestia_utils.apns as apns
 from hestia_utils.parser import Home, HomeResults
+from enrichment.prefilter import enqueue_for_enrichment
 
 APNS_MAX_RETRIES = 3
 APNS_RETRY_BASE_SECONDS = 0.5
@@ -280,6 +281,11 @@ async def scrape_site(target: dict) -> None:
                         home.sqm)
 
         await broadcast(new_homes)
+
+        try:
+            enqueue_for_enrichment(new_homes)
+        except Exception as e:
+            logging.error(f"Enrichment enqueue failed: {repr(e)}")
     else:
         raise ConnectionError(f"Got a non-OK status code: {r.status_code}")
     

@@ -419,13 +419,12 @@ async def set_lang_en(update: telegram.Update, context: ContextTypes.DEFAULT_TYP
 async def callback_query_handler(update: telegram.Update, _) -> None:
     query = update.callback_query
     if not query or not query.data or not query.message: return
-    cbid, action, agency = query.data.split(".")
 
-    # Agency filter callback
-    if cbid == "hfa":
+    # Existing agency filter callbacks (dot-separated)
+    if query.data.startswith("hfa."):
+        cbid, action, agency = query.data.split(".")
         included, reply_keyboard = [], []
 
-        # Update list of enabled agencies for the user
         enabled_agencies: set[str] = set(db.fetch_one("SELECT filter_agencies FROM hestia.subscribers WHERE telegram_id = %s", [str(query.message.chat.id)])["filter_agencies"])
         if action == "d":
             try:
@@ -436,7 +435,6 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
             enabled_agencies.add(agency)
         db.set_filter_agencies(query.message.chat, enabled_agencies)
 
-        # Build inline keyboard
         for row in db.fetch_all("SELECT agency, user_info FROM hestia.targets WHERE enabled = true"):
             if row["agency"] not in included:
                 included.append(row["agency"])
@@ -446,6 +444,142 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
                     reply_keyboard.append([telegram.InlineKeyboardButton(meta.CROSS_EMOJI + " " + row["user_info"]["agency"], callback_data=f"hfa.e.{row['agency']}")])
         await query.answer()
         await query.edit_message_reply_markup(telegram.InlineKeyboardMarkup(reply_keyboard))
+
+    # Letter generation callbacks (colon-separated)
+    elif query.data.startswith("letter_"):
+        parts = query.data.split(":", 1)
+        if len(parts) != 2:
+            return
+        action, callback_id = parts
+        language = "nl" if action == "letter_nl" else "en"
+
+        await query.answer("Generating letter, please wait...")
+
+        try:
+            from enrichment.profile import get_profile_for_telegram_id
+            from enrichment.letters import generate_letter
+
+            profile = get_profile_for_telegram_id(str(query.message.chat.id))
+            if not profile:
+                await query.message.reply_text("No profile found. Use /profile edit to create one.")
+                return
+
+            verdict = db.fetch_one(
+                "SELECT * FROM hestia.enrichment_results "
+                "WHERE id LIKE %s AND profile_id = %s",
+                [callback_id + "%", profile["id"]],
+            )
+            if not verdict:
+                await query.message.reply_text("Listing analysis not found.")
+                return
+
+            letter = generate_letter(profile, dict(verdict), language)
+            await query.message.reply_text(letter)
+        except Exception as e:
+            logging.error(f"Letter generation callback failed: {repr(e)}")
+            await query.message.reply_text("Something went wrong generating the letter. Please try again.")
+
+
+async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.message or not update.message.text: return
+
+    try:
+        from enrichment.profile import get_profile_for_telegram_id, upsert_profile
+    except ImportError:
+        await context.bot.send_message(update.effective_chat.id, "Enrichment module not available.")
+        return
+
+    text = update.message.text.strip()
+    parts = text.split(maxsplit=2)
+
+    if len(parts) == 1:
+        profile = get_profile_for_telegram_id(str(update.effective_chat.id))
+        if not profile:
+            await context.bot.send_message(
+                update.effective_chat.id,
+                "No profile set. Use /profile edit <field> <value> to set fields.\n\n"
+                "Required: full_name, max_rent, target_cities",
+            )
+            return
+        msg = "Your profile:\n\n"
+        for key in [
+            "full_name", "age", "nationality", "employer", "contract_type",
+            "gross_monthly_income", "work_address", "max_rent", "target_cities",
+            "furnishing_pref", "occupants", "pets", "move_in_date",
+        ]:
+            val = profile.get(key)
+            if val is not None:
+                msg += f"{key}: {val}\n"
+        await context.bot.send_message(update.effective_chat.id, msg)
+
+    elif len(parts) >= 3 and parts[1] == "edit":
+        field_and_value = text.split(maxsplit=3)
+        if len(field_and_value) < 4:
+            await context.bot.send_message(update.effective_chat.id, "Usage: /profile edit <field> <value>")
+            return
+        field = field_and_value[2]
+        value = field_and_value[3]
+
+        allowed = {
+            "full_name", "age", "nationality", "languages", "bsn_held", "gemeente",
+            "employer", "contract_type", "gross_monthly_income", "employment_duration",
+            "work_address", "max_rent", "target_cities", "furnishing_pref", "occupants",
+            "pets", "owned_items", "move_in_date", "extra_notes",
+        }
+        if field not in allowed:
+            await context.bot.send_message(
+                update.effective_chat.id,
+                f"Unknown field: {field}\nAllowed: {', '.join(sorted(allowed))}",
+            )
+            return
+
+        if field in ("age", "gross_monthly_income", "max_rent"):
+            try:
+                value = int(value)
+            except ValueError:
+                await context.bot.send_message(update.effective_chat.id, f"{field} must be a number")
+                return
+        elif field == "target_cities":
+            value = [c.strip() for c in value.split(",")]
+        elif field == "languages":
+            value = [lang.strip() for lang in value.split(",")]
+        elif field == "bsn_held":
+            value = value.lower() in ("true", "yes", "1")
+
+        upsert_profile(str(update.effective_chat.id), {field: value})
+        await context.bot.send_message(update.effective_chat.id, f"Updated {field}")
+
+    else:
+        await context.bot.send_message(
+            update.effective_chat.id,
+            "Usage:\n/profile \u2014 view\n/profile edit <field> <value>",
+        )
+
+
+async def cost_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat: return
+
+    try:
+        from enrichment.costs import get_daily_spend, get_monthly_summary
+    except ImportError:
+        await context.bot.send_message(update.effective_chat.id, "Enrichment module not available.")
+        return
+
+    daily = get_daily_spend()
+    monthly = get_monthly_summary()
+
+    msg = f"LLM Costs\n\nToday: ${daily:.4f}\n"
+    msg += f"This month: ${monthly.get('total_cost', 0):.4f}\n"
+    msg += f"Total calls: {monthly.get('total_calls', 0)}\n"
+
+    by_model = monthly.get("by_model")
+    if by_model:
+        msg += "\nBy model:\n"
+        for model, info in by_model.items():
+            cost = info["cost"] if isinstance(info, dict) else info
+            msg += f"  {model}: ${cost:.4f}\n"
+
+    await context.bot.send_message(update.effective_chat.id, msg)
 
 
 async def link(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, code: str = "") -> None:
@@ -503,6 +637,8 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("nodev", disable_dev))
     application.add_handler(CommandHandler("setdonate", set_donation_link))
     application.add_handler(CommandHandler("link", link))
+    application.add_handler(CommandHandler("profile", profile_cmd))
+    application.add_handler(CommandHandler("cost", cost_cmd))
     application.add_handler(CommandHandler("help", help))
     application.add_handler(CommandHandler("faq", faq))
     application.add_handler(CommandHandler("nl", set_lang_nl))
