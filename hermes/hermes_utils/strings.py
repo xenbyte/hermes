@@ -228,6 +228,19 @@ Succes met je zoektocht\!"""
         "nl": "Gebruik: /link <code>\n\nVoer de 4-tekens code van de website in om je account te koppelen."
     },
 
+    "pending_approval": {
+        "en": "Your access request has been received. You'll be notified when you are approved.",
+        "nl": "Je aanvraag is ontvangen. Je krijgt een bericht zodra je bent goedgekeurd."
+    },
+    "approved_notification": {
+        "en": "Your access has been approved! Use /help to see what I can do for you.",
+        "nl": "Je toegang is goedgekeurd! Gebruik /help om te zien wat ik voor je kan doen."
+    },
+    "denied_notification": {
+        "en": "Your access request has been denied.",
+        "nl": "Je aanvraag is helaas afgewezen."
+    },
+
     "help": {
         "en": """*I can do the following for you:*
 /start - Start receiving updates

@@ -1,5 +1,6 @@
 import re
 import logging
+import functools
 import telegram
 from time import sleep
 from telegram.error import Forbidden
@@ -55,18 +56,32 @@ async def get_sub_name(update: telegram.Update, context: ContextTypes.DEFAULT_TY
     return str((await context.bot.get_chat(update.effective_chat.id)).first_name)
 
 
+def requires_approval(func):
+    @functools.wraps(func)
+    async def wrapper(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        if not update.effective_chat:
+            return
+        if not db.is_user_approved(update.effective_chat.id):
+            await context.bot.send_message(
+                update.effective_chat.id,
+                strings.get("pending_approval", update.effective_chat.id)
+            )
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
+
 async def new_sub(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, reenable: bool = False) -> None:
     if not update.effective_chat: return
     name = await get_sub_name(update, context)
     logging.warning(f"New subscriber: {name} ({update.effective_chat.id})")
     
-    # If the user existed before, then re-enable the telegram updates
     if reenable:
         db.enable_user(update.effective_chat.id)
+        await context.bot.send_message(update.effective_chat.id, strings.get("start"), parse_mode="MarkdownV2")
     else:
         db.add_user(update.effective_chat.id)
-        
-    await context.bot.send_message(update.effective_chat.id, strings.get("start"), parse_mode="MarkdownV2")
+        await context.bot.send_message(update.effective_chat.id, strings.get("pending_approval", update.effective_chat.id))
 
 
 async def start(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -75,19 +90,20 @@ async def start(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     payload = context.args[0] if context.args else None
     if checksub:
-        if "telegram_enabled" in checksub and checksub["telegram_enabled"] and not payload:
+        if not checksub.get("approved"):
+            await context.bot.send_message(update.effective_chat.id, strings.get("pending_approval", update.effective_chat.id))
+        elif checksub["telegram_enabled"] and not payload:
             await context.bot.send_message(update.effective_chat.id, strings.get("already_subscribed", update.effective_chat.id))
         elif not payload:
             await new_sub(update, context, reenable=True)
     else:
         await new_sub(update, context)
 
-    if payload and payload.startswith("hermes-web-link-"):
-        print(payload)
-        print(payload[16:])
+    if payload and payload.startswith("hermes-web-link-") and checksub and checksub.get("approved"):
         await link(update, context, payload[16:])
 
 
+@requires_approval
 async def stop(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat: return
     checksub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
@@ -150,6 +166,7 @@ async def announce(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) 
             continue
 
 
+@requires_approval
 async def websites(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat: return
     targets = db.fetch_all("SELECT agency, user_info FROM hermes.targets WHERE enabled = true")
@@ -250,6 +267,7 @@ async def set_donation_link(update: telegram.Update, context: ContextTypes.DEFAU
     await context.bot.send_message(update.effective_chat.id, "Donation link updated")
     
 
+@requires_approval
 async def filter(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.message or not update.message.text: return
     try:
@@ -386,6 +404,7 @@ async def filter(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) ->
     await context.bot.send_message(update.effective_chat.id, message, parse_mode="Markdown")
 
 
+@requires_approval
 async def donate(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat: return
     donation_link = db.get_donation_link()
@@ -398,18 +417,21 @@ async def donate(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+@requires_approval
 async def faq(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat: return
     donation_link = db.get_donation_link()
     await context.bot.send_message(update.effective_chat.id, strings.get("faq", update.effective_chat.id, [donation_link]), parse_mode="MarkdownV2", disable_web_page_preview=True)
 
 
+@requires_approval
 async def set_lang_nl(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat: return
     db.set_user_lang(update.effective_chat, "nl")
     await context.bot.send_message(update.effective_chat.id, "Ik spreek vanaf nu Nederlands")
 
 
+@requires_approval
 async def set_lang_en(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat: return
     db.set_user_lang(update.effective_chat, "en")
@@ -480,6 +502,7 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
             await query.message.reply_text("Something went wrong generating the letter. Please try again.")
 
 
+@requires_approval
 async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.message or not update.message.text: return
 
@@ -556,6 +579,7 @@ async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYP
         )
 
 
+@requires_approval
 async def cost_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat: return
 
@@ -582,6 +606,7 @@ async def cost_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) 
     await context.bot.send_message(update.effective_chat.id, msg)
 
 
+@requires_approval
 async def link(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, code: str = "") -> None:
     if not update.effective_chat or not update.message or not update.message.text: return
 
@@ -602,6 +627,7 @@ async def link(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, code
         await context.bot.send_message(update.effective_chat.id, strings.get("link_invalid_code", update.effective_chat.id))
 
 
+@requires_approval
 async def help(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or not update.message or not update.message.text: return
     message = strings.get("help", update.effective_chat.id)
