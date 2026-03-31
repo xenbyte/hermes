@@ -2,7 +2,7 @@ import logging
 
 from psycopg2.extras import RealDictCursor
 
-from hestia_utils.db import get_connection, fetch_one, fetch_all, _write
+from hermes_utils.db import get_connection, fetch_one, fetch_all, _write
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def get_profiles_with_enrichment() -> list[dict]:
     """All profiles that have max_rent and target_cities set."""
     return fetch_all(
-        "SELECT * FROM hestia.user_profiles "
+        "SELECT * FROM hermes.user_profiles "
         "WHERE max_rent IS NOT NULL AND target_cities IS NOT NULL"
     )
 
@@ -18,7 +18,7 @@ def get_profiles_with_enrichment() -> list[dict]:
 def get_profile_by_id(profile_id: int) -> dict | None:
     """Single profile by PK."""
     result = fetch_one(
-        "SELECT * FROM hestia.user_profiles WHERE id = %s", [profile_id]
+        "SELECT * FROM hermes.user_profiles WHERE id = %s", [profile_id]
     )
     return result or None
 
@@ -26,7 +26,7 @@ def get_profile_by_id(profile_id: int) -> dict | None:
 def get_profile_for_telegram_id(telegram_id: str) -> dict | None:
     """Profile by telegram_id, or None."""
     result = fetch_one(
-        "SELECT * FROM hestia.user_profiles WHERE telegram_id = %s",
+        "SELECT * FROM hermes.user_profiles WHERE telegram_id = %s",
         [telegram_id],
     )
     return result or None
@@ -58,7 +58,7 @@ def upsert_profile(telegram_id: str, fields: dict) -> int:
     update_parts.append("updated_at = now()")
 
     query = (
-        f"INSERT INTO hestia.user_profiles ({', '.join(columns)}) "
+        f"INSERT INTO hermes.user_profiles ({', '.join(columns)}) "
         f"VALUES ({', '.join(placeholders)}) "
         f"ON CONFLICT (telegram_id) DO UPDATE SET {', '.join(update_parts)} "
         f"RETURNING id"

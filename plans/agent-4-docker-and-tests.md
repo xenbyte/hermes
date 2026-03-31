@@ -5,19 +5,19 @@ Read `@plans/context.md` first for full project context.
 ## Prerequisites
 
 Agents 1, 2, and 3 must be complete. Verify all enrichment files exist:
-- `hestia/enrichment/__init__.py`
-- `hestia/enrichment/profile.py`
-- `hestia/enrichment/queue.py`
-- `hestia/enrichment/costs.py`
-- `hestia/enrichment/fetcher.py`
-- `hestia/enrichment/analyzer.py`
-- `hestia/enrichment/letters.py`
-- `hestia/enrichment/prefilter.py`
+- `hermes/enrichment/__init__.py`
+- `hermes/enrichment/profile.py`
+- `hermes/enrichment/queue.py`
+- `hermes/enrichment/costs.py`
+- `hermes/enrichment/fetcher.py`
+- `hermes/enrichment/analyzer.py`
+- `hermes/enrichment/letters.py`
+- `hermes/enrichment/prefilter.py`
 - `misc/sql/enrichment_schema.sql`
 
 Also verify the modifications to:
-- `hestia/scraper.py` (has `enqueue_for_enrichment` call)
-- `hestia/bot.py` (has letter callbacks, `/profile`, `/cost`)
+- `hermes/scraper.py` (has `enqueue_for_enrichment` call)
+- `hermes/bot.py` (has letter callbacks, `/profile`, `/cost`)
 
 ## Your Job
 
@@ -52,11 +52,11 @@ RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
 WORKDIR /analyzer
 
 # Copy requirements and install
-COPY hestia/requirements.txt .
+COPY hermes/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY hestia/ ./hestia/
+COPY hermes/ ./hermes/
 
 # Create data directory for logs
 RUN mkdir -p /data
@@ -75,7 +75,7 @@ CMD ["/analyzer-cron-entry.sh"]
 #!/bin/bash
 # Generate cron schedule from ENRICHMENT_INTERVAL_HOURS (default: 4)
 INTERVAL=${ENRICHMENT_INTERVAL_HOURS:-4}
-echo "0 */${INTERVAL} * * * root cd /analyzer && ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} python3 -m hestia.enrichment.analyzer >> /data/analyzer.log 2>&1" > /etc/cron.d/analyzer
+echo "0 */${INTERVAL} * * * root cd /analyzer && ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} python3 -m hermes.enrichment.analyzer >> /data/analyzer.log 2>&1" > /etc/cron.d/analyzer
 chmod 0644 /etc/cron.d/analyzer
 crontab /etc/cron.d/analyzer
 
@@ -88,17 +88,17 @@ cron -f
 Add the analyzer service alongside the existing services:
 
 ```yaml
-  hestia-analyzer:
+  hermes-analyzer:
     build:
       context: ..
       dockerfile: docker/Dockerfile.analyzer
-    container_name: hestia-analyzer
+    container_name: hermes-analyzer
     restart: unless-stopped
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ENRICHMENT_INTERVAL_HOURS=${ENRICHMENT_INTERVAL_HOURS:-4}
     volumes:
-      - hestia-data:/data
+      - hermes-data:/data
     depends_on:
       - postgres
 ```
@@ -111,14 +111,14 @@ Add the analyzer image build alongside existing bot/scraper builds:
 
 ```bash
 # In the build section, add:
-docker build -t hestia-analyzer -f docker/Dockerfile.analyzer .
+docker build -t hermes-analyzer -f docker/Dockerfile.analyzer .
 ```
 
 Add migration for enrichment schema:
 
 ```bash
 # In the migration section, add:
-docker exec -i postgres psql -U hestia -d hestia < misc/sql/enrichment_schema.sql
+docker exec -i postgres psql -U hermes -d hermes < misc/sql/enrichment_schema.sql
 ```
 
 Look at how existing builds and migrations are structured in `build.sh` and follow the exact same pattern.
@@ -222,13 +222,13 @@ class TestEnrichedMessage:
 ```
 
 Each test class should have working implementations. Use `unittest.mock.patch` to mock:
-- `hestia_utils.db.fetch_one`, `fetch_all`, `_write`, `get_connection` — always mock DB
+- `hermes_utils.db.fetch_one`, `fetch_all`, `_write`, `get_connection` — always mock DB
 - `anthropic.Anthropic` — always mock the API client
-- `hestia_utils.meta.BOT` — already mocked in `conftest.py`
+- `hermes_utils.meta.BOT` — already mocked in `conftest.py`
 
 For `TestPrefilter`: Create a mock `Home` object with the right attributes. Don't import the real `Home` class if it has import side effects — create a simple mock with `address`, `city`, `price`, `url`, `agency`, `sqm` attributes.
 
-For `TestClaudeResponseParser`: Import `_parse_claude_response` from `hestia.enrichment.analyzer` and test it directly. This is the most important test — it must handle all edge cases.
+For `TestClaudeResponseParser`: Import `_parse_claude_response` from `hermes.enrichment.analyzer` and test it directly. This is the most important test — it must handle all edge cases.
 
 ### 6. Update `tests/requirements-test.txt`
 
@@ -239,7 +239,7 @@ Check if it already has `pytest` and `pytest-asyncio`. If not, add them. No othe
 - Follow existing Docker patterns exactly. Don't invent new conventions.
 - The analyzer container must have access to the same Postgres instance as bot and scraper.
 - Tests must run without any external services (no DB, no API, no Telegram).
-- Tests must not import `hestia_utils.secrets` directly (it's not committed). Use mocks as shown in `tests/conftest.py`.
+- Tests must not import `hermes_utils.secrets` directly (it's not committed). Use mocks as shown in `tests/conftest.py`.
 - The cron entry script must forward environment variables into the cron environment (cron doesn't inherit them by default — the script handles this).
 
 ## How to Verify

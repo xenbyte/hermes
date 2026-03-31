@@ -9,13 +9,13 @@ fi
 TAG=latest
 APP_VERSION=$(git rev-parse --short HEAD)
 DOCKER_COMPOSE_ARGS='-f docker/docker-compose.yml'
-DB_CONTAINER='hestia-database'
+DB_CONTAINER='hermes-database'
 
 if [[ $1 == dev ]]; then
         TAG=dev
         DOCKER_COMPOSE_ARGS='-f docker/docker-compose-dev.yml'
         APP_VERSION="$APP_VERSION-dev"
-        DB_CONTAINER='hestia-database-dev'
+        DB_CONTAINER='hermes-database-dev'
 fi
 
 run_sql_files() {
@@ -26,12 +26,12 @@ run_sql_files() {
 
         echo "Waiting for database container (${DB_CONTAINER})..."
         for _ in $(seq 1 30); do
-                if docker exec "$DB_CONTAINER" pg_isready -q -d hestia -U postgres; then
+                if docker exec "$DB_CONTAINER" pg_isready -q -d hermes -U postgres; then
                         break
                 fi
                 sleep 1
         done
-        docker exec "$DB_CONTAINER" pg_isready -q -d hestia -U postgres
+        docker exec "$DB_CONTAINER" pg_isready -q -d hermes -U postgres
 
         echo "Applying SQL files from misc/sql"
         for sql_file in $(find misc/sql -maxdepth 1 -type f \( -name '*.sql' -o -name '*.sql.enc' \) | sort); do
@@ -51,20 +51,20 @@ run_sql_files() {
                         decrypted_file=$(mktemp)
                         sops --decrypt "$sql_file" > "$decrypted_file"
                         docker cp "$decrypted_file" "${DB_CONTAINER}:${tmp_path}.sql"
-                        docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 hestia postgres -f "${tmp_path}.sql"
+                        docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 hermes postgres -f "${tmp_path}.sql"
                         rm -f "$decrypted_file"
                 else
                         echo "     (warning) applying plaintext SQL; prefer .sql.enc for secrets"
                         docker cp "$sql_file" "${DB_CONTAINER}:${tmp_path}"
-                        docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 hestia postgres -f "$tmp_path"
+                        docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 hermes postgres -f "$tmp_path"
                 fi
         done
 }
 
-docker build --build-arg=APP_VERSION="$APP_VERSION" --tag xenbyte/hestia-bot:$TAG -f docker/Dockerfile.bot .
-docker build --build-arg=APP_VERSION="$APP_VERSION" --tag xenbyte/hestia-scraper:$TAG -f docker/Dockerfile.scraper .
-docker build --build-arg=APP_VERSION="$APP_VERSION" --tag xenbyte/hestia-analyzer:$TAG -f docker/Dockerfile.analyzer .
-docker build --tag xenbyte/hestia-web:$TAG -f web/Dockerfile web/
+docker build --build-arg=APP_VERSION="$APP_VERSION" --tag xenbyte/hermes-bot:$TAG -f docker/Dockerfile.bot .
+docker build --build-arg=APP_VERSION="$APP_VERSION" --tag xenbyte/hermes-scraper:$TAG -f docker/Dockerfile.scraper .
+docker build --build-arg=APP_VERSION="$APP_VERSION" --tag xenbyte/hermes-analyzer:$TAG -f docker/Dockerfile.analyzer .
+docker build --tag xenbyte/hermes-web:$TAG -f web/Dockerfile web/
 
 if [[ $1 == -y ]] || [[ $2 == -y ]]; then
         docker compose $DOCKER_COMPOSE_ARGS up -d

@@ -1,4 +1,4 @@
-from hestia_utils.parser import Home
+from hermes_utils.parser import Home
 
 
 class TestHomeConstruction:

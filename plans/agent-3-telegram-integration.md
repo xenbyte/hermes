@@ -5,44 +5,44 @@ Read `@plans/context.md` first for full project context.
 ## Prerequisites
 
 Agents 1 and 2 must be complete. Verify these files exist before starting:
-- `hestia/enrichment/__init__.py`
-- `hestia/enrichment/profile.py`
-- `hestia/enrichment/queue.py`
-- `hestia/enrichment/costs.py`
-- `hestia/enrichment/fetcher.py`
-- `hestia/enrichment/analyzer.py`
+- `hermes/enrichment/__init__.py`
+- `hermes/enrichment/profile.py`
+- `hermes/enrichment/queue.py`
+- `hermes/enrichment/costs.py`
+- `hermes/enrichment/fetcher.py`
+- `hermes/enrichment/analyzer.py`
 
 Read all of them to understand the interfaces.
 
 ## Your Job
 
-1. `hestia/enrichment/letters.py` — motivation letter generator with caching
-2. `hestia/enrichment/prefilter.py` — pre-filter + enqueue function
-3. Modify `hestia/scraper.py` — wire in `enqueue_for_enrichment()` after broadcast
-4. Modify `hestia/bot.py` — add letter callbacks, `/profile` command, `/cost` command
+1. `hermes/enrichment/letters.py` — motivation letter generator with caching
+2. `hermes/enrichment/prefilter.py` — pre-filter + enqueue function
+3. Modify `hermes/scraper.py` — wire in `enqueue_for_enrichment()` after broadcast
+4. Modify `hermes/bot.py` — add letter callbacks, `/profile` command, `/cost` command
 
 ## Files to Read First
 
-- `hestia/bot.py` — understand ALL existing handlers, especially `callback_query_handler()` (line 419+). Your letter callbacks must coexist with the existing `hfa.*` agency filter callbacks.
-- `hestia/scraper.py` — understand `scrape_site()` (line 250+) and where to add the enqueue call.
-- `hestia/hestia_utils/meta.py` — `BOT`, `escape_markdownv2()`, emoji constants
-- `hestia/hestia_utils/db.py` — DB patterns for reads/writes
-- `hestia/hestia_utils/strings.py` — understand how localized strings work (you don't need to add to this, just be aware)
-- `hestia/hestia_utils/secrets.py` (template at `misc/secrets.py.template`) — you'll need `OWN_CHAT_ID` for error notifications
-- `hestia/enrichment/profile.py` — for `get_profile_for_telegram_id()`, `get_profiles_with_enrichment()`, `build_system_prompt()`, `upsert_profile()`
-- `hestia/enrichment/queue.py` — for `enqueue()`
-- `hestia/enrichment/costs.py` — for `get_daily_spend()`, `get_monthly_summary()`
-- `hestia/enrichment/analyzer.py` — for understanding the verdict/result schema stored in DB
+- `hermes/bot.py` — understand ALL existing handlers, especially `callback_query_handler()` (line 419+). Your letter callbacks must coexist with the existing `hfa.*` agency filter callbacks.
+- `hermes/scraper.py` — understand `scrape_site()` (line 250+) and where to add the enqueue call.
+- `hermes/hermes_utils/meta.py` — `BOT`, `escape_markdownv2()`, emoji constants
+- `hermes/hermes_utils/db.py` — DB patterns for reads/writes
+- `hermes/hermes_utils/strings.py` — understand how localized strings work (you don't need to add to this, just be aware)
+- `hermes/hermes_utils/secrets.py` (template at `misc/secrets.py.template`) — you'll need `OWN_CHAT_ID` for error notifications
+- `hermes/enrichment/profile.py` — for `get_profile_for_telegram_id()`, `get_profiles_with_enrichment()`, `build_system_prompt()`, `upsert_profile()`
+- `hermes/enrichment/queue.py` — for `enqueue()`
+- `hermes/enrichment/costs.py` — for `get_daily_spend()`, `get_monthly_summary()`
+- `hermes/enrichment/analyzer.py` — for understanding the verdict/result schema stored in DB
 
 ## Files to Create
 
-### 1. `hestia/enrichment/prefilter.py`
+### 1. `hermes/enrichment/prefilter.py`
 
 ```python
 import logging
-from hestia_utils.parser import Home
-from hestia.enrichment.profile import get_profiles_with_enrichment
-from hestia.enrichment.queue import enqueue
+from hermes_utils.parser import Home
+from hermes.enrichment.profile import get_profiles_with_enrichment
+from hermes.enrichment.queue import enqueue
 
 def should_enqueue(home: Home, profile: dict) -> bool:
     """Return True if:
@@ -60,14 +60,14 @@ def enqueue_for_enrichment(new_homes: list[Home]) -> None:
     Catch all exceptions — this must NEVER crash the scraper."""
 ```
 
-### 2. `hestia/enrichment/letters.py`
+### 2. `hermes/enrichment/letters.py`
 
 ```python
 import logging
 import anthropic
-from hestia_utils.db import get_connection, fetch_one, _write
-from hestia.enrichment.profile import build_system_prompt
-from hestia.enrichment.costs import log_usage
+from hermes_utils.db import get_connection, fetch_one, _write
+from hermes.enrichment.profile import build_system_prompt
+from hermes.enrichment.costs import log_usage
 
 LETTER_MODEL = "claude-sonnet-4-20250514"
 
@@ -93,13 +93,13 @@ def generate_letter(profile: dict, verdict: dict, language: str) -> str:
 
 ## Files to Modify
 
-### 3. `hestia/scraper.py`
+### 3. `hermes/scraper.py`
 
 Add ONE import and ONE function call. Minimal change.
 
 At the top, add import:
 ```python
-from hestia.enrichment.prefilter import enqueue_for_enrichment
+from hermes.enrichment.prefilter import enqueue_for_enrichment
 ```
 
 In `scrape_site()`, after the `await broadcast(new_homes)` call (line ~282), add:
@@ -112,7 +112,7 @@ In `scrape_site()`, after the `await broadcast(new_homes)` call (line ~282), add
 
 That's it. The try/except ensures enrichment failures never break the existing scraper flow.
 
-### 4. `hestia/bot.py`
+### 4. `hermes/bot.py`
 
 Three additions:
 
@@ -141,16 +141,16 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
         await query.answer("Generating letter, please wait...")
 
         # Load profile for this user
-        from hestia.enrichment.profile import get_profile_for_telegram_id
-        from hestia.enrichment.letters import generate_letter
-        from hestia_utils.db import fetch_one
+        from hermes.enrichment.profile import get_profile_for_telegram_id
+        from hermes.enrichment.letters import generate_letter
+        from hermes_utils.db import fetch_one
 
         profile = get_profile_for_telegram_id(str(query.message.chat.id))
         if not profile:
             await query.message.reply_text("No profile found. Use /profile set to create one.")
             return
 
-        verdict = fetch_one("SELECT * FROM hestia.enrichment_results WHERE id = %s", [result_id])
+        verdict = fetch_one("SELECT * FROM hermes.enrichment_results WHERE id = %s", [result_id])
         if not verdict:
             await query.message.reply_text("Listing analysis not found.")
             return
@@ -168,7 +168,7 @@ Add a new handler function:
 async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.message or not update.message.text: return
 
-    from hestia.enrichment.profile import get_profile_for_telegram_id, upsert_profile
+    from hermes.enrichment.profile import get_profile_for_telegram_id, upsert_profile
 
     text = update.message.text.strip()
     parts = text.split(maxsplit=2)
@@ -233,7 +233,7 @@ async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYP
 async def cost_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat: return
 
-    from hestia.enrichment.costs import get_daily_spend, get_monthly_summary
+    from hermes.enrichment.costs import get_daily_spend, get_monthly_summary
 
     daily = get_daily_spend()
     monthly = get_monthly_summary()
@@ -263,7 +263,7 @@ The callback handler registration already exists — the modified `callback_quer
 ## Rules
 
 - The scraper.py change must be wrapped in try/except — enrichment must NEVER crash the scraper.
-- Imports from `hestia.enrichment.*` in `bot.py` should be done inside the handler functions (lazy imports) to avoid import errors if enrichment modules aren't installed.
+- Imports from `hermes.enrichment.*` in `bot.py` should be done inside the handler functions (lazy imports) to avoid import errors if enrichment modules aren't installed.
 - Letter generation callbacks must call `query.answer()` before doing slow work (Claude API call), so Telegram doesn't show a loading spinner timeout.
 - The `/profile` command does NOT require admin privileges — any subscriber can set their own profile.
 - The `/cost` command could be admin-only (use the existing `privileged()` check) or open to any user with a profile. Your choice — lean toward open since each user only sees their own costs.

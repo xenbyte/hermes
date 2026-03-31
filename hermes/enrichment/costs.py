@@ -2,7 +2,7 @@ import logging
 
 from psycopg2.extras import RealDictCursor
 
-from hestia_utils.db import get_connection, fetch_one, _write
+from hermes_utils.db import get_connection, fetch_one, _write
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +24,10 @@ def _estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
 
 
 def log_usage(batch_id: str, model: str, input_tokens: int, output_tokens: int) -> None:
-    """INSERT into hestia.llm_usage with estimated_cost."""
+    """INSERT into hermes.llm_usage with estimated_cost."""
     cost = _estimate_cost(model, input_tokens, output_tokens)
     _write(
-        "INSERT INTO hestia.llm_usage (batch_id, model, input_tokens, output_tokens, estimated_cost) "
+        "INSERT INTO hermes.llm_usage (batch_id, model, input_tokens, output_tokens, estimated_cost) "
         "VALUES (%s, %s, %s, %s, %s)",
         [batch_id, model, input_tokens, output_tokens, cost],
     )
@@ -41,7 +41,7 @@ def get_daily_spend() -> float:
     """SUM(estimated_cost) for today (since midnight UTC)."""
     result = fetch_one(
         "SELECT COALESCE(SUM(estimated_cost), 0) AS total "
-        "FROM hestia.llm_usage "
+        "FROM hermes.llm_usage "
         "WHERE called_at >= CURRENT_DATE"
     )
     return float(result.get("total", 0))
@@ -70,7 +70,7 @@ def get_monthly_summary() -> dict:
                 "  model, "
                 "  COUNT(*) AS calls, "
                 "  COALESCE(SUM(estimated_cost), 0) AS cost "
-                "FROM hestia.llm_usage "
+                "FROM hermes.llm_usage "
                 "WHERE called_at >= date_trunc('month', CURRENT_DATE) "
                 "GROUP BY model"
             )

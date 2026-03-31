@@ -6,9 +6,9 @@ misc/sql/*.sql
 !misc/sql/*.sql.enc
 !misc/sql/README.md
 
-# Hestia specific files
+# Hermes specific files
 error.log
-hestia.log
+hermes.log
 data/*
 docker/data/
 secrets.py

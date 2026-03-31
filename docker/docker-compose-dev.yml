@@ -1,65 +1,65 @@
 networks:
-  hestia-network-dev:
-    name: hestia-network-dev
+  hermes-network-dev:
+    name: hermes-network-dev
 
 volumes:
-  hestia-database-volume-dev:
-    name: hestia-database-volume-dev
+  hermes-database-volume-dev:
+    name: hermes-database-volume-dev
 
 services:
-  hestia-bot-dev:
+  hermes-bot-dev:
     build:
       context: ..
       dockerfile: docker/Dockerfile.bot
-    container_name: hestia-bot-dev
+    container_name: hermes-bot-dev
     healthcheck:
       test: cat /proc/1/cmdline || exit 1
       start_period: 5s
-    image: xenbyte/hestia-bot:dev
+    image: xenbyte/hermes-bot:dev
     networks: 
-      - hestia-network-dev
+      - hermes-network-dev
     restart: unless-stopped
     volumes:
       - ./data:/data
-    working_dir: /hestia
+    working_dir: /bot/hermes
 
-  hestia-scraper-dev:
+  hermes-scraper-dev:
     build:
       context: ..
       dockerfile: docker/Dockerfile.scraper
-    container_name: hestia-scraper-dev
+    container_name: hermes-scraper-dev
     healthcheck:
       test: pgrep cron || exit 1
       start_period: 5s
-    image: xenbyte/hestia-scraper:dev
+    image: xenbyte/hermes-scraper:dev
     networks: 
-      - hestia-network-dev
+      - hermes-network-dev
     restart: unless-stopped
     volumes:
       - ./data:/data
     working_dir: /scraper
 
-  hestia-analyzer-dev:
+  hermes-analyzer-dev:
     build:
       context: ..
       dockerfile: docker/Dockerfile.analyzer
-    container_name: hestia-analyzer-dev
+    container_name: hermes-analyzer-dev
     healthcheck:
       test: pgrep cron || exit 1
       start_period: 5s
-    image: xenbyte/hestia-analyzer:dev
+    image: xenbyte/hermes-analyzer:dev
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ENRICHMENT_INTERVAL_HOURS=${ENRICHMENT_INTERVAL_HOURS:-4}
     networks: 
-      - hestia-network-dev
+      - hermes-network-dev
     restart: unless-stopped
     volumes:
       - ./data:/data
     working_dir: /analyzer
 
-  hestia-database-dev:
-    container_name: hestia-database-dev
+  hermes-database-dev:
+    container_name: hermes-database-dev
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres || exit 1"]
       interval: 5s
@@ -68,21 +68,21 @@ services:
       start_period: 10s
     image: postgres:16
     networks: 
-      - hestia-network-dev
+      - hermes-network-dev
     ports:
       - "127.0.0.1:54321:5432"
     restart: unless-stopped 
     volumes:
-      - hestia-database-volume-dev:/var/lib/postgresql/data
+      - hermes-database-volume-dev:/var/lib/postgresql/data
 
-  hestia-web:
+  hermes-web:
     build:
       context: ../web
       dockerfile: Dockerfile
-    container_name: hestia-web-dev
-    image: xenbyte/hestia-web:dev
+    container_name: hermes-web-dev
+    image: xenbyte/hermes-web:dev
     networks:
-      - hestia-network-dev
+      - hermes-network-dev
     ports:
       - "19191:5050"
     volumes:
@@ -109,7 +109,7 @@ services:
       - /app/local_testing/cert.pem
       - --keyfile
       - /app/local_testing/key.pem
-      - hestia_web.app:app
+      - hermes_web.app:app
     healthcheck:
       test:
         - CMD-SHELL

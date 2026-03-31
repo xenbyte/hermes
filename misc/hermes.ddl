@@ -1,31 +1,31 @@
--- DROP SCHEMA hestia;
+-- DROP SCHEMA hermes;
 
-CREATE SCHEMA hestia AUTHORIZATION postgres;
+CREATE SCHEMA hermes AUTHORIZATION postgres;
 
--- DROP SEQUENCE hestia.subscribers_id_seq;
+-- DROP SEQUENCE hermes.subscribers_id_seq;
 
-CREATE SEQUENCE hestia.subscribers_id_seq
+CREATE SEQUENCE hermes.subscribers_id_seq
   INCREMENT BY 1
   MINVALUE 1
   MAXVALUE 2147483647
   START 1
   CACHE 1
   NO CYCLE;
--- DROP SEQUENCE hestia.targets_id_seq;
+-- DROP SEQUENCE hermes.targets_id_seq;
 
-CREATE SEQUENCE hestia.targets_id_seq
+CREATE SEQUENCE hermes.targets_id_seq
   INCREMENT BY 1
   MINVALUE 1
   MAXVALUE 2147483647
   START 1
   CACHE 1
-  NO CYCLE;-- hestia.homes definition
+  NO CYCLE;-- hermes.homes definition
 
 -- Drop table
 
--- DROP TABLE hestia.homes;
+-- DROP TABLE hermes.homes;
 
-CREATE TABLE hestia.homes (
+CREATE TABLE hermes.homes (
   url varchar NOT NULL,
   address varchar NOT NULL,
   city varchar NOT NULL,
@@ -36,47 +36,47 @@ CREATE TABLE hestia.homes (
 );
 
 
--- hestia.link_codes definition
+-- hermes.link_codes definition
 
 -- Drop table
 
--- DROP TABLE hestia.link_codes;
+-- DROP TABLE hermes.link_codes;
 
-CREATE TABLE hestia.link_codes (
+CREATE TABLE hermes.link_codes (
   code varchar(4) NOT NULL,
   email_address varchar NOT NULL,
   created_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
   expires_at timestamptz NOT NULL,
   CONSTRAINT link_codes_pkey PRIMARY KEY (code)
 );
-CREATE INDEX link_codes_email_idx ON hestia.link_codes USING btree (email_address);
-CREATE INDEX link_codes_expires_idx ON hestia.link_codes USING btree (expires_at);
+CREATE INDEX link_codes_email_idx ON hermes.link_codes USING btree (email_address);
+CREATE INDEX link_codes_expires_idx ON hermes.link_codes USING btree (expires_at);
 
 
--- hestia.magic_tokens definition
+-- hermes.magic_tokens definition
 
 -- Drop table
 
--- DROP TABLE hestia.magic_tokens;
+-- DROP TABLE hermes.magic_tokens;
 
-CREATE TABLE hestia.magic_tokens (
+CREATE TABLE hermes.magic_tokens (
   token_id varchar(36) NOT NULL,
   email_address varchar NOT NULL,
   created_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
   expires_at timestamptz NOT NULL,
   CONSTRAINT magic_tokens_pkey PRIMARY KEY (token_id)
 );
-CREATE INDEX magic_tokens_email_idx ON hestia.magic_tokens USING btree (email_address);
-CREATE INDEX magic_tokens_expires_idx ON hestia.magic_tokens USING btree (expires_at);
+CREATE INDEX magic_tokens_email_idx ON hermes.magic_tokens USING btree (email_address);
+CREATE INDEX magic_tokens_expires_idx ON hermes.magic_tokens USING btree (expires_at);
 
 
--- hestia.meta definition
+-- hermes.meta definition
 
 -- Drop table
 
--- DROP TABLE hestia.meta;
+-- DROP TABLE hermes.meta;
 
-CREATE TABLE hestia.meta (
+CREATE TABLE hermes.meta (
   id varchar NOT NULL,
   devmode_enabled bool DEFAULT false NOT NULL,
   scraper_halted bool DEFAULT false NOT NULL,
@@ -86,13 +86,13 @@ CREATE TABLE hestia.meta (
 );
 
 
--- hestia.preview_cache definition
+-- hermes.preview_cache definition
 
 -- Drop table
 
--- DROP TABLE hestia.preview_cache;
+-- DROP TABLE hermes.preview_cache;
 
-CREATE TABLE hestia.preview_cache (
+CREATE TABLE hermes.preview_cache (
   url varchar NOT NULL,
   status varchar NOT NULL,
   image_url varchar NULL,
@@ -102,16 +102,16 @@ CREATE TABLE hestia.preview_cache (
   expires_at timestamptz NOT NULL,
   CONSTRAINT preview_cache_pkey PRIMARY KEY (url)
 );
-CREATE INDEX preview_cache_expires_idx ON hestia.preview_cache USING btree (expires_at);
+CREATE INDEX preview_cache_expires_idx ON hermes.preview_cache USING btree (expires_at);
 
 
--- hestia.subscribers definition
+-- hermes.subscribers definition
 
 -- Drop table
 
--- DROP TABLE hestia.subscribers;
+-- DROP TABLE hermes.subscribers;
 
-CREATE TABLE hestia.subscribers (
+CREATE TABLE hermes.subscribers (
   id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL,
   subscription_expiry timestamp DEFAULT '2099-01-01 00:00:00'::timestamp without time zone NULL,
   user_level int4 DEFAULT 0 NOT NULL,
@@ -129,17 +129,17 @@ CREATE TABLE hestia.subscribers (
   apns_token text NULL,
   CONSTRAINT subscribers_device_id_key UNIQUE (device_id)
 );
-CREATE INDEX idx_subscribers_email_address ON hestia.subscribers USING btree (email_address);
-CREATE INDEX idx_subscribers_device_id ON hestia.subscribers USING btree (device_id);
+CREATE INDEX idx_subscribers_email_address ON hermes.subscribers USING btree (email_address);
+CREATE INDEX idx_subscribers_device_id ON hermes.subscribers USING btree (device_id);
 
 
--- hestia.targets definition
+-- hermes.targets definition
 
 -- Drop table
 
--- DROP TABLE hestia.targets;
+-- DROP TABLE hermes.targets;
 
-CREATE TABLE hestia.targets (
+CREATE TABLE hermes.targets (
   id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL,
   agency varchar NOT NULL,
   queryurl varchar NOT NULL,
@@ -151,13 +151,13 @@ CREATE TABLE hestia.targets (
 );
 
 
--- hestia.error_rollups definition
+-- hermes.error_rollups definition
 
 -- Drop table
 
--- DROP TABLE hestia.error_rollups;
+-- DROP TABLE hermes.error_rollups;
 
-CREATE TABLE hestia.error_rollups (
+CREATE TABLE hermes.error_rollups (
   day date NOT NULL,
   fingerprint varchar(64) NOT NULL,
   component varchar NOT NULL,
@@ -172,4 +172,4 @@ CREATE TABLE hestia.error_rollups (
   last_seen timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
   CONSTRAINT error_rollups_pkey PRIMARY KEY (day, fingerprint)
 );
-CREATE INDEX error_rollups_last_seen_idx ON hestia.error_rollups USING btree (last_seen);
+CREATE INDEX error_rollups_last_seen_idx ON hermes.error_rollups USING btree (last_seen);

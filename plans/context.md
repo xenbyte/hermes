@@ -1,26 +1,26 @@
-# Hestia Enrichment Extension — Full Context
+# Hermes Enrichment Extension — Full Context
 
 Read this file first. It describes the entire project. Your specific job is in a separate agent file.
 
-## What Hestia Is
+## What Hermes Is
 
-Hestia is a multi-subscriber Dutch rental listing bot. Two processes run as separate Docker containers sharing one PostgreSQL instance:
+Hermes is a multi-subscriber Dutch rental listing bot. Two processes run as separate Docker containers sharing one PostgreSQL instance:
 
-- **Scraper** (`hestia/scraper.py`): Cron every 5 minutes. Loops all enabled targets, fetches search results via HTTP, parses them into `Home` objects, deduplicates against `hestia.homes` (past 180 days by address+city), writes new homes to DB, then broadcasts to subscribers via Telegram.
-- **Bot** (`hestia/bot.py`): Long-polling Telegram bot. Handles user commands (`/start`, `/stop`, `/filter`, `/help`, etc.) and inline keyboard callbacks.
+- **Scraper** (`hermes/scraper.py`): Cron every 5 minutes. Loops all enabled targets, fetches search results via HTTP, parses them into `Home` objects, deduplicates against `hermes.homes` (past 180 days by address+city), writes new homes to DB, then broadcasts to subscribers via Telegram.
+- **Bot** (`hermes/bot.py`): Long-polling Telegram bot. Handles user commands (`/start`, `/stop`, `/filter`, `/help`, etc.) and inline keyboard callbacks.
 
 ### Key Existing Files
 
 | File | Role |
 |------|------|
-| `hestia/scraper.py` | Scrape loop, `scrape_site()`, `broadcast()` |
-| `hestia/bot.py` | Telegram command handlers, `callback_query_handler()` |
-| `hestia/hestia_utils/parser.py` | `Home` class (plain class, not dataclass) + 25+ site parsers in `HomeResults` |
-| `hestia/hestia_utils/db.py` | PostgreSQL access: `fetch_one()`, `fetch_all()`, `_write()`, `get_connection()` |
-| `hestia/hestia_utils/meta.py` | Shared `BOT` instance, emoji constants, `escape_markdownv2()` |
-| `hestia/hestia_utils/secrets.py` | Not committed. Contains `TOKEN`, `DB` dict, `OWN_CHAT_ID`, `APNS` |
-| `hestia/requirements.txt` | Dependencies for bot + scraper |
-| `docker/docker-compose.yml` | Services: hestia-bot, hestia-scraper, hestia-web, postgres |
+| `hermes/scraper.py` | Scrape loop, `scrape_site()`, `broadcast()` |
+| `hermes/bot.py` | Telegram command handlers, `callback_query_handler()` |
+| `hermes/hermes_utils/parser.py` | `Home` class (plain class, not dataclass) + 25+ site parsers in `HomeResults` |
+| `hermes/hermes_utils/db.py` | PostgreSQL access: `fetch_one()`, `fetch_all()`, `_write()`, `get_connection()` |
+| `hermes/hermes_utils/meta.py` | Shared `BOT` instance, emoji constants, `escape_markdownv2()` |
+| `hermes/hermes_utils/secrets.py` | Not committed. Contains `TOKEN`, `DB` dict, `OWN_CHAT_ID`, `APNS` |
+| `hermes/requirements.txt` | Dependencies for bot + scraper |
+| `docker/docker-compose.yml` | Services: hermes-bot, hermes-scraper, hermes-web, postgres |
 
 ### How `Home` Works
 
@@ -44,7 +44,7 @@ class Home:
 async def scrape_site(target: dict) -> None:
     r = requests.get/post(target["queryurl"], ...)
     if r.status_code == 200:
-        prev_homes = [Home(h["address"], h["city"]) for h in db.fetch_all("SELECT address, city FROM hestia.homes WHERE date_added > now() - interval '180 day'")]
+        prev_homes = [Home(h["address"], h["city"]) for h in db.fetch_all("SELECT address, city FROM hermes.homes WHERE date_added > now() - interval '180 day'")]
         new_homes = [home for home in HomeResults(target["agency"], r) if home not in prev_homes]
         for home in new_homes:
             db.add_home(home.url, home.address, home.city, home.price, home.agency, datetime.now().isoformat(), home.sqm)
@@ -66,7 +66,7 @@ All DB access goes through `get_connection()` → `psycopg2.connect()` using `se
 - Reads: `fetch_one(query, params)` / `fetch_all(query, params)` — returns dict/list via `RealDictCursor`
 - Writes: `_write(query, params)` — executes + commits
 
-Logging goes to `/data/hestia.log`.
+Logging goes to `/data/hermes.log`.
 
 ---
 
@@ -111,12 +111,12 @@ bot.py (long-polling, existing)
 
 ## Database Schema (New Tables)
 
-All in existing `hestia` schema. Migration SQL goes in `misc/sql/`.
+All in existing `hermes` schema. Migration SQL goes in `misc/sql/`.
 
-### hestia.user_profiles
+### hermes.user_profiles
 
 ```sql
-CREATE TABLE hestia.user_profiles (
+CREATE TABLE hermes.user_profiles (
     id                   SERIAL PRIMARY KEY,
     telegram_id          TEXT NOT NULL UNIQUE,
     full_name            TEXT NOT NULL,
@@ -143,12 +143,12 @@ CREATE TABLE hestia.user_profiles (
 );
 ```
 
-### hestia.enrichment_queue
+### hermes.enrichment_queue
 
 ```sql
-CREATE TABLE hestia.enrichment_queue (
+CREATE TABLE hermes.enrichment_queue (
     id           TEXT PRIMARY KEY,       -- sha256(url)
-    profile_id   INTEGER REFERENCES hestia.user_profiles(id),
+    profile_id   INTEGER REFERENCES hermes.user_profiles(id),
     url          TEXT NOT NULL,
     address      TEXT,
     city         TEXT,
@@ -163,12 +163,12 @@ CREATE TABLE hestia.enrichment_queue (
 );
 ```
 
-### hestia.enrichment_results
+### hermes.enrichment_results
 
 ```sql
-CREATE TABLE hestia.enrichment_results (
+CREATE TABLE hermes.enrichment_results (
     id               TEXT PRIMARY KEY,   -- same sha256(url) as queue
-    profile_id       INTEGER REFERENCES hestia.user_profiles(id),
+    profile_id       INTEGER REFERENCES hermes.user_profiles(id),
     url              TEXT NOT NULL,
     score            INTEGER,            -- 1-10
     compatible       BOOLEAN,
@@ -186,10 +186,10 @@ CREATE TABLE hestia.enrichment_results (
 );
 ```
 
-### hestia.llm_usage
+### hermes.llm_usage
 
 ```sql
-CREATE TABLE hestia.llm_usage (
+CREATE TABLE hermes.llm_usage (
     id             SERIAL PRIMARY KEY,
     batch_id       TEXT,
     model          TEXT,
@@ -372,7 +372,7 @@ Listings scored below 5: compact grouped message, no inline keyboards.
 - Existing bot commands and their behavior
 - Polling interval and scheduler
 - The web app
-- `hestia_utils/secrets.py` structure
+- `hermes_utils/secrets.py` structure
 
 ---
 

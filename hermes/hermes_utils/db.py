@@ -6,12 +6,12 @@ from typing import Literal
 from datetime import datetime
 from psycopg2.extras import RealDictCursor, RealDictRow
 
-from hestia_utils.secrets import DB
+from hermes_utils.secrets import DB
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s]: %(message)s",
     level=logging.WARNING,
-    filename="/data/hestia.log"
+    filename="/data/hermes.log"
 )
 
 LANG_CACHE = {}
@@ -56,22 +56,22 @@ def fetch_all(query: str, params: list[str] = []) -> list[RealDictRow]:
     return result
 
 def get_dev_mode() -> bool:
-    result = fetch_one("SELECT devmode_enabled FROM hestia.meta WHERE id = 'default'")
+    result = fetch_one("SELECT devmode_enabled FROM hermes.meta WHERE id = 'default'")
     if result and "devmode_enabled" in result:
         return result["devmode_enabled"]
     return True
 def get_scraper_halted() -> bool:
-    result = fetch_one("SELECT scraper_halted FROM hestia.meta WHERE id = 'default'")
+    result = fetch_one("SELECT scraper_halted FROM hermes.meta WHERE id = 'default'")
     if result and "scraper_halted" in result:
         return result["scraper_halted"]
     return True
 def get_donation_link() -> str:
-    result = fetch_one("SELECT donation_link FROM hestia.meta WHERE id = 'default'")
+    result = fetch_one("SELECT donation_link FROM hermes.meta WHERE id = 'default'")
     if result and "donation_link" in result:
         return result["donation_link"]
     return ""
 def get_donation_link_updated() -> datetime:
-    result = fetch_one("SELECT donation_link_updated FROM hestia.meta WHERE id = 'default'")
+    result = fetch_one("SELECT donation_link_updated FROM hermes.meta WHERE id = 'default'")
     if result and "donation_link_updated" in result:
         return result["donation_link_updated"]
     return datetime.min
@@ -79,7 +79,7 @@ def get_donation_link_updated() -> datetime:
 def get_user_lang(telegram_id: int) -> Literal["en", "nl"]:
     if telegram_id in LANG_CACHE:
         return LANG_CACHE[telegram_id]
-    result = fetch_one("SELECT lang FROM hestia.subscribers WHERE telegram_id = %s", [str(telegram_id)])
+    result = fetch_one("SELECT lang FROM hermes.subscribers WHERE telegram_id = %s", [str(telegram_id)])
     if result and "lang" in result and result["lang"] in ["en", "nl"]:
         LANG_CACHE[telegram_id] = result["lang"]
         return result["lang"]
@@ -100,26 +100,26 @@ def _write(query: str, params: list[str] = []) -> None:
         if conn: conn.close()
 
 def add_home(url: str, address: str, city: str, price: int, agency: str, date_added: str, sqm: int = -1) -> None:
-    _write("INSERT INTO hestia.homes (url, address, city, price, agency, date_added, sqm) VALUES (%s, %s, %s, %s, %s, %s, %s)", [url, address, city, str(price), agency, date_added, str(sqm)])
+    _write("INSERT INTO hermes.homes (url, address, city, price, agency, date_added, sqm) VALUES (%s, %s, %s, %s, %s, %s, %s)", [url, address, city, str(price), agency, date_added, str(sqm)])
 def add_user(telegram_id: int) -> None:
-    # Use an explicit column list so this stays valid when new columns are added to hestia.subscribers.
-    _write("INSERT INTO hestia.subscribers (telegram_enabled, telegram_id) VALUES (true, %s)", [str(telegram_id)])
+    # Use an explicit column list so this stays valid when new columns are added to subscribers.
+    _write("INSERT INTO hermes.subscribers (telegram_enabled, telegram_id) VALUES (true, %s)", [str(telegram_id)])
 def enable_user(telegram_id: int) -> None:
-    _write("UPDATE hestia.subscribers SET telegram_enabled = true WHERE telegram_id = %s", [str(telegram_id)])
+    _write("UPDATE hermes.subscribers SET telegram_enabled = true WHERE telegram_id = %s", [str(telegram_id)])
 def disable_user(telegram_id: int) -> None:
-    _write("UPDATE hestia.subscribers SET telegram_enabled = false WHERE telegram_id = %s", [str(telegram_id)])
+    _write("UPDATE hermes.subscribers SET telegram_enabled = false WHERE telegram_id = %s", [str(telegram_id)])
 def clear_apns_token(subscriber_id: int) -> None:
-    _write("UPDATE hestia.subscribers SET apns_token = NULL WHERE id = %s", [str(subscriber_id)])
+    _write("UPDATE hermes.subscribers SET apns_token = NULL WHERE id = %s", [str(subscriber_id)])
 def halt_scraper() -> None:
-    _write("UPDATE hestia.meta SET scraper_halted = true WHERE id = 'default'")
+    _write("UPDATE hermes.meta SET scraper_halted = true WHERE id = 'default'")
 def resume_scraper() -> None:
-    _write("UPDATE hestia.meta SET scraper_halted = false WHERE id = 'default'")
+    _write("UPDATE hermes.meta SET scraper_halted = false WHERE id = 'default'")
 def enable_dev_mode() -> None:
-    _write("UPDATE hestia.meta SET devmode_enabled = true WHERE id = 'default'")
+    _write("UPDATE hermes.meta SET devmode_enabled = true WHERE id = 'default'")
 def disable_dev_mode() -> None:
-    _write("UPDATE hestia.meta SET devmode_enabled = false WHERE id = 'default'")
+    _write("UPDATE hermes.meta SET devmode_enabled = false WHERE id = 'default'")
 def update_donation_link(link: str) -> None:
-    _write("UPDATE hestia.meta SET donation_link = %s, donation_link_updated = now() WHERE id = 'default'", [link])
+    _write("UPDATE hermes.meta SET donation_link = %s, donation_link_updated = now() WHERE id = 'default'", [link])
 
 
 def upsert_error_rollup(
@@ -134,13 +134,13 @@ def upsert_error_rollup(
 ) -> None:
     _write(
         """
-        INSERT INTO hestia.error_rollups
+        INSERT INTO hermes.error_rollups
             (day, fingerprint, component, agency, target_id, error_class, message, sample, context, count, first_seen, last_seen)
         VALUES
             (CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, 1, now(), now())
         ON CONFLICT (day, fingerprint)
         DO UPDATE SET
-            count = hestia.error_rollups.count + 1,
+            count = hermes.error_rollups.count + 1,
             last_seen = now(),
             message = EXCLUDED.message,
             sample = EXCLUDED.sample,
@@ -172,7 +172,7 @@ def get_recent_error_rollups(hours: int = 24, limit: int = 20) -> list[RealDictR
             SUM(count) AS total_count,
             MIN(first_seen) AS first_seen,
             MAX(last_seen) AS last_seen
-        FROM hestia.error_rollups
+        FROM hermes.error_rollups
         WHERE last_seen >= now() - (%s::int * interval '1 hour')
         GROUP BY fingerprint, component, agency, target_id, error_class
         HAVING SUM(count) > 50
@@ -185,7 +185,7 @@ def get_recent_error_rollups(hours: int = 24, limit: int = 20) -> list[RealDictR
 
 def cleanup_error_rollups(retention_days: int = 30) -> None:
     _write(
-        "DELETE FROM hestia.error_rollups WHERE day < CURRENT_DATE - %s::int",
+        "DELETE FROM hermes.error_rollups WHERE day < CURRENT_DATE - %s::int",
         [retention_days],
     )
 
@@ -197,8 +197,8 @@ def get_enabled_targets_without_recent_homes(days: int = 7) -> list[RealDictRow]
             t.id,
             t.agency,
             COUNT(h.url) AS homes_count
-        FROM hestia.targets t
-        LEFT JOIN hestia.homes h
+        FROM hermes.targets t
+        LEFT JOIN hermes.homes h
             ON h.agency = t.agency
            AND h.date_added >= now() - (%s::int * interval '1 day')
         WHERE t.enabled = true
@@ -210,18 +210,18 @@ def get_enabled_targets_without_recent_homes(days: int = 7) -> list[RealDictRow]
     )
 
 def set_filter_minprice(telegram_chat: Chat, min_price: int) -> None:
-    _write("UPDATE hestia.subscribers SET filter_min_price = %s WHERE telegram_id = %s", [str(min_price), str(telegram_chat.id)])
+    _write("UPDATE hermes.subscribers SET filter_min_price = %s WHERE telegram_id = %s", [str(min_price), str(telegram_chat.id)])
 def set_filter_maxprice(telegram_chat: Chat, max_price: int) -> None:
-    _write("UPDATE hestia.subscribers SET filter_max_price = %s WHERE telegram_id = %s", [str(max_price), str(telegram_chat.id)])
+    _write("UPDATE hermes.subscribers SET filter_max_price = %s WHERE telegram_id = %s", [str(max_price), str(telegram_chat.id)])
 def set_filter_cities(telegram_chat: Chat, cities: str) -> None:
-    _write("UPDATE hestia.subscribers SET filter_cities = %s WHERE telegram_id = %s", [str(cities).replace("'", '"'), str(telegram_chat.id)])
+    _write("UPDATE hermes.subscribers SET filter_cities = %s WHERE telegram_id = %s", [str(cities).replace("'", '"'), str(telegram_chat.id)])
 def set_filter_agencies(telegram_chat: Chat, agencies: set[str]) -> None:
-    _write("UPDATE hestia.subscribers SET filter_agencies = %s WHERE telegram_id = %s", [str(list(agencies)).replace("'", '"'), str(telegram_chat.id)])
+    _write("UPDATE hermes.subscribers SET filter_agencies = %s WHERE telegram_id = %s", [str(list(agencies)).replace("'", '"'), str(telegram_chat.id)])
 def set_filter_minsqm(telegram_chat: Chat, min_sqm: int) -> None:
-    _write("UPDATE hestia.subscribers SET filter_min_sqm = %s WHERE telegram_id = %s", [str(min_sqm), str(telegram_chat.id)])
+    _write("UPDATE hermes.subscribers SET filter_min_sqm = %s WHERE telegram_id = %s", [str(min_sqm), str(telegram_chat.id)])
 
 def set_user_lang(telegram_chat: Chat, lang: Literal["en", "nl"]) -> None:
-    _write("UPDATE hestia.subscribers SET lang = %s WHERE telegram_id = %s", [lang, str(telegram_chat.id)])
+    _write("UPDATE hermes.subscribers SET lang = %s WHERE telegram_id = %s", [lang, str(telegram_chat.id)])
     LANG_CACHE[telegram_chat.id] = lang
 
 
@@ -233,7 +233,7 @@ def _load_filter_defaults(cur) -> dict:
         """
         SELECT column_name, column_default, data_type
         FROM information_schema.columns
-        WHERE table_schema = 'hestia'
+        WHERE table_schema = 'hermes'
           AND table_name = 'subscribers'
           AND column_name = ANY(%s)
         """,
@@ -261,7 +261,7 @@ def _filters_are_default(cur, where_sql: str, params: list[str], defaults: dict)
             checks.append(f"({col})::text IS NOT DISTINCT FROM ({default_expr})::text AS {col}_default")
         else:
             checks.append(f"{col} IS NOT DISTINCT FROM {default_expr} AS {col}_default")
-    query = f"SELECT {', '.join(checks)} FROM hestia.subscribers WHERE {where_sql}"
+    query = f"SELECT {', '.join(checks)} FROM hermes.subscribers WHERE {where_sql}"
     cur.execute(query, params)
     result = cur.fetchone()
     if not result:
@@ -274,7 +274,7 @@ def link_account(telegram_id: int, code: str) -> Literal["success", "invalid_cod
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Look up the code
-            cur.execute("SELECT email_address FROM hestia.link_codes WHERE code = %s AND expires_at > now()", [code])
+            cur.execute("SELECT email_address FROM hermes.link_codes WHERE code = %s AND expires_at > now()", [code])
             row = cur.fetchone()
             if not row:
                 return "invalid_code"
@@ -282,15 +282,15 @@ def link_account(telegram_id: int, code: str) -> Literal["success", "invalid_cod
             email = row["email_address"]
 
             # Check if the Telegram user already has an email linked
-            cur.execute("SELECT email_address FROM hestia.subscribers WHERE telegram_id = %s", [str(telegram_id)])
+            cur.execute("SELECT email_address FROM hermes.subscribers WHERE telegram_id = %s", [str(telegram_id)])
             sub = cur.fetchone()
             if sub and sub["email_address"]:
                 return "already_linked"
 
             # Read both subscriber rows and compare filters with DB defaults
-            cur.execute("SELECT * FROM hestia.subscribers WHERE telegram_id = %s", [str(telegram_id)])
+            cur.execute("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(telegram_id)])
             tg_sub = cur.fetchone()
-            cur.execute("SELECT * FROM hestia.subscribers WHERE email_address = %s AND telegram_id IS NULL", [email])
+            cur.execute("SELECT * FROM hermes.subscribers WHERE email_address = %s AND telegram_id IS NULL", [email])
             web_sub = cur.fetchone()
 
             defaults = _load_filter_defaults(cur)
@@ -303,7 +303,7 @@ def link_account(telegram_id: int, code: str) -> Literal["success", "invalid_cod
             if tg_sub and web_sub and tg_default and not web_default:
                 cur.execute(
                     """
-                    UPDATE hestia.subscribers
+                    UPDATE hermes.subscribers
                     SET filter_min_price = %s,
                         filter_max_price = %s,
                         filter_cities = %s,
@@ -322,13 +322,13 @@ def link_account(telegram_id: int, code: str) -> Literal["success", "invalid_cod
                 )
 
             # Set email on the Telegram user's row
-            cur.execute("UPDATE hestia.subscribers SET email_address = %s WHERE telegram_id = %s", [email, str(telegram_id)])
+            cur.execute("UPDATE hermes.subscribers SET email_address = %s WHERE telegram_id = %s", [email, str(telegram_id)])
 
             # Delete the web-only subscriber row (has email but no telegram_id)
-            cur.execute("DELETE FROM hestia.subscribers WHERE email_address = %s AND telegram_id IS NULL", [email])
+            cur.execute("DELETE FROM hermes.subscribers WHERE email_address = %s AND telegram_id IS NULL", [email])
 
             # Delete the used link code
-            cur.execute("DELETE FROM hestia.link_codes WHERE code = %s", [code])
+            cur.execute("DELETE FROM hermes.link_codes WHERE code = %s", [code])
 
             conn.commit()
             return "success"

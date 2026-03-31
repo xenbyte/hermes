@@ -1,6 +1,6 @@
 /* ---- Theme and lang initialization (must run before render) ---- */
 (function() {
-    var t = localStorage.getItem('hestia-theme');
+    var t = localStorage.getItem('hermes-theme');
     if (t === 'light' || t === 'dark') {
         document.documentElement.setAttribute('data-theme', t);
         return;
@@ -12,7 +12,7 @@
     document.documentElement.setAttribute('data-theme', 'light');
 })();
 (function() {
-    var stored = localStorage.getItem('hestia-lang');
+    var stored = localStorage.getItem('hermes-lang');
     var preferred = (navigator.languages && navigator.languages.length)
         ? navigator.languages[0]
         : (navigator.language || 'en');
@@ -24,7 +24,7 @@ function toggleTheme() {
     var current = document.documentElement.getAttribute('data-theme');
     var next = current === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('hestia-theme', next);
+    localStorage.setItem('hermes-theme', next);
     updateThemeIcon();
 }
 function updateThemeIcon() {
@@ -45,27 +45,27 @@ function escapeHtml(text) {
 }
 
 /* ---- i18n framework ---- */
-var HESTIA_I18N = {
+var HERMES_I18N = {
     en: {
-        'welcome_title': 'Welcome to Hestia',
+        'welcome_title': 'Welcome to Hermes',
         'welcome_subtitle': 'Enter your e-mail address to continue',
         'login_sent_title': "You've got mail",
         'login_sent_subtitle': 'I just sent a login link to',
         'login_sent_help': "Didn't get it? Check your spam folder or try again in a minute.",
         'continue_aria': 'Continue',
-        'dashboard_title': 'Your Hestia',
+        'dashboard_title': 'Your Hermes homes',
         'homes_empty': 'No homes match your current filters. Try adjusting your settings.',
-        'homes_limit_reached': "There may be more results, but Hestia can\u2019t look back this far.",
+        'homes_limit_reached': "There may be more results, but Hermes can\u2019t look back this far.",
         'homes_end_reached': 'You\u2019ve seen everything!',
         'logged_in_as': 'Logged in as',
-        'logout_confirm': 'Log out of Hestia?',
+        'logout_confirm': 'Log out of Hermes?',
         'settings_title': 'Settings and filters',
         'restore_btn': 'Restore',
         'save_btn': 'Save',
         'notifications_legend': 'Notifications',
         'telegram_label': 'Telegram',
         'price_range_legend': 'Price range',
-        'price_range_info': 'Hestia will only send you homes within this range.',
+        'price_range_info': 'Hermes will only send you homes within this range.',
         'price_min_label': 'Minimum',
         'price_max_label': 'Maximum',
         'price_suffix': '/mo',
@@ -78,42 +78,42 @@ var HESTIA_I18N = {
         'agencies_info': "Only search for homes from these agencies/websites.<br><br>Something missing? It\'s possible that the integration with a website is broken. The website will be temporarily unavailable until a fix can be deployed.",
         'agencies_search': 'Search agencies\u2026',
         'cities_legend': 'Cities',
-        'cities_info': 'Only search for homes in these cities.<br><br>City missing? These are all cities Hestia has found homes in. Newly found cities will be added automatically.',
+        'cities_info': 'Only search for homes in these cities.<br><br>City missing? These are all cities Hermes has found homes in. Newly found cities will be added automatically.',
         'cities_search': 'Search cities\u2026',
         'add_city_placeholder': 'Add city\u2026',
         'saving_label': 'Saving\u2026',
         'saving_error': "Couldn\u2019t save changes. Click to try again.",
         'saving_error_tap': "Couldn\u2019t save changes. Tap to try again.",
-        'cost_link': 'Hestia is free, but costs \u20ac68/month to run',
+        'cost_link': 'Hermes is free, but costs \u20ac68/month to run',
         'cost_modal_title': 'Running costs',
         'cost_hosting': 'Hosting (main + backup)',
         'cost_email': 'E-mail API',
-        'cost_domain': 'Domain name (hestia.bot)',
+        'cost_domain': 'Domain name',
         'cost_claude': 'Claude Pro (yes, the entire web portal is vibe-coded)',
         'cost_coffee': 'Caffeinated beverages (to support a 6-hour coding bender on a random Friday night because I also have a full-time job)',
         'cost_total': 'Total',
-        'cost_donate_text': "Hestia is a passion project and will always be free. Similar services will cost you at least \u20ac20/month.<br>If you'd like to help keep Hestia running, consider",
+        'cost_donate_text': "Hermes is a passion project and will always be free. Similar services will cost you at least \u20ac20/month.<br>If you'd like to help keep Hermes running, consider",
         'cost_donate_link': 'making a donation with this open Tikkie',
         'contact_email': 'E-mail:',
         'contact_email_login_required': 'E-mail: only visible after logging in',
-        'contact_telegram': 'Telegram (the guy who made this):',
+        'contact_support': 'Support:',
+        'contact_support_detail': 'Use GitHub issues or discussions to reach the maintainers.',
+        'contact_community': 'Community:',
+        'contact_community_detail': 'Prefer the repository below for questions and feedback.',
         'contact_github': 'GitHub (source code):',
-        'contact_avatar_credit': 'Hestia artwork courtesy of ',
-        'faq_q_what': 'What is Hestia?',
-        'faq_a_what': 'Hestia is a home-finding service that monitors websites and notifies you about new matches within your filters.',
-        'faq_q_free': 'Hestia is free?',
-        'faq_a_free': 'Yes. I built Hestia for myself and once we found a home, I thought it would be nice to share it with others!',
-        'faq_q_speed': 'How quick is Hestia?',
+        'faq_q_what': 'What is Hermes?',
+        'faq_a_what': 'Hermes is a home-finding service that monitors websites and notifies you about new matches within your filters.',
+        'faq_q_free': 'Hermes is free?',
+        'faq_a_free': 'Yes. I built Hermes for myself and once we found a home, I thought it would be nice to share it with others!',
+        'faq_q_speed': 'How quick is Hermes?',
         'faq_a_speed': 'Notifications should arrive within 10 minutes.',
         'faq_q_filters': 'Can you add a filter for amount of rooms or postal code?',
-        'faq_a_filters': 'In short: no, because it makes Hestia less reliable. Please see <a href="https://github.com/xenbyte/hestia/issues/55#issuecomment-2453400778" target="_blank" rel="noopener noreferrer">this comment</a> for the full explanation, and feel free to discuss if you disagree!',
+        'faq_a_filters': 'In short: no, because it makes Hermes less reliable. Extra filters often depend on data we cannot fetch consistently from every source.',
         'faq_q_buy': 'Does this work if I want to buy a home?',
         'faq_a_buy': 'Not yet, but who knows what I might build when I am looking to buy something myself!',
-        'faq_q_pararius': 'I saw this listing on Pararius and I did not get a message from Hestia. Why?',
-        'faq_a_pararius': 'Pararius does not list a house number for all homes, so Hestia cannot check if it has already seen the listing on another website. To avoid duplicates, those listings are skipped.',
-        'faq_q_app': 'Is there an app?',
-        'faq_a_app': 'Yes! Hestia is available as an <a href="https://apps.apple.com/app/id6760269825" target="_blank" rel="noopener noreferrer">iPhone app</a>.',
-        'faq_q_thanks': 'Can I thank you for building and sharing Hestia for free?',
+        'faq_q_pararius': 'I saw this listing on Pararius and I did not get a message from Hermes. Why?',
+        'faq_a_pararius': 'Pararius does not list a house number for all homes, so Hermes cannot check if it has already seen the listing on another website. To avoid duplicates, those listings are skipped.',
+        'faq_q_thanks': 'Can I thank you for building and sharing Hermes for free?',
         'faq_a_thanks': 'Yes! Click the euro icon below the settings panel. Thanks!',
         'link_telegram_modal_title': 'Link your Telegram account',
         'link_telegram_modal_text': 'Be notified of new results without your browser open!',
@@ -138,19 +138,19 @@ var HESTIA_I18N = {
         'browser_notif_denied': 'Notifications blocked by browser',
         'browser_notif_new_one': '1 new home has been found',
         'browser_notif_new_many': '{count} new homes have been found',
-        'browser_notif_ios_info': 'Browser notifications are not available due to iOS restrictions. Download the <a href="https://apps.apple.com/app/id6760269825" target="_blank" rel="noopener noreferrer">Hestia app for iPhone</a> to get notifications on your phone!',
-        'experimental_warning': 'Hestia is still a work in progress \u2014 you may experience some instability here and there!'
+        'browser_notif_ios_info': 'Browser notifications are not available in Safari on iOS due to platform restrictions.',
+        'experimental_warning': 'Hermes is still a work in progress \u2014 you may experience some instability here and there!'
     },
     nl: {
-        'welcome_title': 'Welkom bij Hestia',
+        'welcome_title': 'Welkom bij Hermes',
         'welcome_subtitle': 'Voer je e-mailadres in om verder te gaan',
         'login_sent_title': 'Je hebt mail',
         'login_sent_subtitle': 'Ik heb net een inloglink gestuurd naar',
         'login_sent_help': 'Nog niets ontvangen? Check je spam of probeer het over een minuutje opnieuw!',
         'continue_aria': 'Ga door',
-        'dashboard_title': 'Jouw Hestia',
+        'dashboard_title': 'Jouw Hermes-woningen',
         'homes_empty': 'Geen woningen gevonden met deze filters. Pas je instellingen aan.',
-        'homes_limit_reached': 'Er zijn mogelijk meer resultaten, maar Hestia kan niet zo ver terug kijken.',
+        'homes_limit_reached': 'Er zijn mogelijk meer resultaten, maar Hermes kan niet zo ver terug kijken.',
         'homes_end_reached': 'Je hebt alles gezien!',
         'logged_in_as': 'Ingelogd als',
         'logout_confirm': 'Weet je zeker dat je wilt uitloggen?',
@@ -173,42 +173,42 @@ var HESTIA_I18N = {
         'agencies_info': 'Zoek alleen woningen van deze makelaars/websites.<br><br>Ontbreekt er eentje? Het kan zijn dat de integratie met een website stuk is. De website is dan tijdelijk niet beschikbaar tot het probleem is opgelost.',
         'agencies_search': 'Zoek makelaars\u2026',
         'cities_legend': 'Plaatsen',
-        'cities_info': 'Zoek alleen woningen in deze plaatsen.<br><br>Ontbreekt er eentje? Dit zijn alle plaatsen die Hestia tot nu toe online heeft gezien. Nieuwe plaatsen worden automatisch toegevoegd.',
+        'cities_info': 'Zoek alleen woningen in deze plaatsen.<br><br>Ontbreekt er eentje? Dit zijn alle plaatsen die Hermes tot nu toe online heeft gezien. Nieuwe plaatsen worden automatisch toegevoegd.',
         'cities_search': 'Zoek plaatsen\u2026',
         'add_city_placeholder': 'Voeg plaats toe\u2026',
         'saving_label': 'Opslaan\u2026',
         'saving_error': 'Opslaan mislukt. Klik om opnieuw te proberen.',
         'saving_error_tap': 'Opslaan mislukt. Tik om opnieuw te proberen.',
-        'cost_link': 'Hestia is gratis, maar kost \u20ac68/maand om draaiende te houden',
+        'cost_link': 'Hermes is gratis, maar kost \u20ac68/maand om draaiende te houden',
         'cost_modal_title': 'Kostenoverzicht',
         'cost_hosting': 'Hosting (main + backup)',
         'cost_email': 'E-mail API',
-        'cost_domain': 'Domeinnaam (hestia.bot)',
+        'cost_domain': 'Domeinnaam',
         'cost_claude': 'Claude Pro (ja, bespaart een hoop tijd)',
         'cost_coffee': 'Cafe\u00efnehoudende dranken (om een 6-uur durende programmeersessie op een willekeurige vrijdagavond te faciliteren omdat ik ook gewoon een fulltime baan heb)',
         'cost_total': 'Totaal',
-        'cost_donate_text': 'Hestia is een "passieproject" en zal altijd gratis blijven. Vergelijkbare diensten kosten minimaal \u20ac20/maand.<br>Wil je helpen Hestia online te houden, dan kun je',
+        'cost_donate_text': 'Hermes is een "passieproject" en zal altijd gratis blijven. Vergelijkbare diensten kosten minimaal \u20ac20/maand.<br>Wil je helpen Hermes online te houden, dan kun je',
         'cost_donate_link': 'met dit open Tikkie daaraan bijdragen',
         'contact_email': 'E-mail:',
         'contact_email_login_required': 'E-mail: alleen zichtbaar na inloggen',
-        'contact_telegram': 'Telegram (van de chef):',
+        'contact_support': 'Support:',
+        'contact_support_detail': 'Gebruik GitHub issues of discussions om de maintainers te bereiken.',
+        'contact_community': 'Community:',
+        'contact_community_detail': 'Zie het repository hieronder voor vragen en feedback.',
         'contact_github': 'GitHub (source code):',
-        'contact_avatar_credit': 'Hestia artwork met dank aan ',
-        'faq_q_what': 'Wat is Hestia?',
-        'faq_a_what': 'Hestia is een woningzoeker die advertenties in de gaten houdt en je meldingen stuurt als er nieuwe woningen binnen jouw filters gevonden zijn.',
-        'faq_q_free': 'Is Hestia gratis?',
-        'faq_a_free': 'Ja! Ik had Hestia voor gebouwd mezelf en toen we een huis hadden gevonden heb ik het online gegooid en is het doorgegroeid.',
-        'faq_q_speed': 'Hoe snel is Hestia?',
+        'faq_q_what': 'Wat is Hermes?',
+        'faq_a_what': 'Hermes is een woningzoeker die advertenties in de gaten houdt en je meldingen stuurt als er nieuwe woningen binnen jouw filters gevonden zijn.',
+        'faq_q_free': 'Is Hermes gratis?',
+        'faq_a_free': 'Ja! Ik had Hermes voor gebouwd mezelf en toen we een huis hadden gevonden heb ik het online gegooid en is het doorgegroeid.',
+        'faq_q_speed': 'Hoe snel is Hermes?',
         'faq_a_speed': 'Meldingen zouden binnen 10 minuten moeten doorkomen.',
         'faq_q_filters': 'Kun je een filter toevoegen voor aantal kamers of postcode?',
-        'faq_a_filters': 'Kort gezegd: nee, omdat dit Hestia minder betrouwbaar maakt. Zie <a href="https://github.com/xenbyte/hestia/issues/55#issuecomment-2453400778" target="_blank" rel="noopener noreferrer">deze uitleg</a> voor de volledige motivatie, en reageer gerust als je het er niet mee eens bent!',
+        'faq_a_filters': 'Kort gezegd: nee, omdat dit Hermes minder betrouwbaar maakt. Extra filters hangen vaak af van gegevens die we niet overal betrouwbaar kunnen ophalen.',
         'faq_q_buy': 'Werkt dit ook als ik een huis wil kopen?',
         'faq_a_buy': 'Nog niet, maar wie weet wat ik bouw wanneer we zelf iets willen kopen!',
-        'faq_q_pararius': 'Ik zag een woning op Pararius en kreeg geen melding van Hestia. Waarom?',
-        'faq_a_pararius': 'Pararius vermeldt niet bij alle woningen een huisnummer, waardoor Hestia niet kan controleren of de woning al op een andere website is gezien. Om dubbele meldingen te voorkomen slaan we die over.',
-        'faq_q_app': 'Is er een app?',
-        'faq_a_app': 'Ja! Hestia is beschikbaar als <a href="https://apps.apple.com/app/id6760269825" target="_blank" rel="noopener noreferrer">iPhone-app</a>.',
-        'faq_q_thanks': 'Kan ik je bedanken voor het bouwen en delen van Hestia?',
+        'faq_q_pararius': 'Ik zag een woning op Pararius en kreeg geen melding van Hermes. Waarom?',
+        'faq_a_pararius': 'Pararius vermeldt niet bij alle woningen een huisnummer, waardoor Hermes niet kan controleren of de woning al op een andere website is gezien. Om dubbele meldingen te voorkomen slaan we die over.',
+        'faq_q_thanks': 'Kan ik je bedanken voor het bouwen en delen van Hermes?',
         'faq_a_thanks': 'Zeker! Klik op het euro-icoon onder het instellingenpaneel. Thanks!',
         'link_telegram_modal_title': 'Koppel je Telegram-account',
         'link_telegram_modal_text': 'Ontvang notificaties zonder deze pagina open te houden!',
@@ -233,16 +233,16 @@ var HESTIA_I18N = {
         'browser_notif_denied': 'Meldingen geblokkeerd door browser',
         'browser_notif_new_one': '1 nieuwe woning gevonden',
         'browser_notif_new_many': '{count} nieuwe woningen gevonden',
-        'browser_notif_ios_info': 'Notificaties in de browser werken niet door beperkingen binnen iOS. Download de <a href="https://apps.apple.com/app/id6760269825" target="_blank" rel="noopener noreferrer">Hestia-app voor iPhone</a> om notificaties op je telefoon te ontvangen!',
-        'experimental_warning': 'Hestia is nog volop in ontwikkeling \u2014 het kan zijn dat er soms iets stuk gaat!'
+        'browser_notif_ios_info': 'Browsermeldingen zijn in Safari op iOS niet beschikbaar door platformbeperkingen.',
+        'experimental_warning': 'Hermes is nog volop in ontwikkeling \u2014 het kan zijn dat er soms iets stuk gaat!'
     }
 };
-function hestiaGetLang() {
-    return localStorage.getItem('hestia-lang') || document.documentElement.getAttribute('lang') || 'en';
+function hermesGetLang() {
+    return localStorage.getItem('hermes-lang') || document.documentElement.getAttribute('lang') || 'en';
 }
-function hestiaApplyLang(lang) {
-    var dict = HESTIA_I18N[lang] || {};
-    localStorage.setItem('hestia-lang', lang);
+function hermesApplyLang(lang) {
+    var dict = HERMES_I18N[lang] || {};
+    localStorage.setItem('hermes-lang', lang);
     document.querySelectorAll('[data-i18n]').forEach(function(el) {
         var key = el.getAttribute('data-i18n');
         if (dict[key] !== undefined) el.textContent = dict[key];
@@ -275,19 +275,19 @@ function hestiaApplyLang(lang) {
     updateLangLabel();
 }
 function toggleLang() {
-    var current = hestiaGetLang();
+    var current = hermesGetLang();
     var next = current === 'en' ? 'nl' : 'en';
-    localStorage.setItem('hestia-lang', next);
-    hestiaApplyLang(next);
+    localStorage.setItem('hermes-lang', next);
+    hermesApplyLang(next);
 }
 function updateLangLabel() {
     var label = document.querySelector('.lang-label');
-    if (label) label.textContent = hestiaGetLang().toUpperCase();
+    if (label) label.textContent = hermesGetLang().toUpperCase();
 }
-hestiaApplyLang(hestiaGetLang());
+hermesApplyLang(hermesGetLang());
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
-        hestiaApplyLang(hestiaGetLang());
+        hermesApplyLang(hermesGetLang());
     });
 }
 document.addEventListener('click', function(event) {
@@ -383,8 +383,8 @@ function closeCostModal() {
 }
 function openStatsModal() {
     if (!statsModal || !statsContent) return;
-    var lang = hestiaGetLang();
-    var dict = HESTIA_I18N[lang] || {};
+    var lang = hermesGetLang();
+    var dict = HERMES_I18N[lang] || {};
     statsModal.classList.add('visible');
 
     // Show loading state

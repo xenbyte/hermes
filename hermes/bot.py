@@ -5,10 +5,10 @@ from time import sleep
 from telegram.error import Forbidden
 from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-import hestia_utils.db as db
-import hestia_utils.meta as meta
-import hestia_utils.secrets as secrets
-import hestia_utils.strings as strings
+import hermes_utils.db as db
+import hermes_utils.meta as meta
+import hermes_utils.secrets as secrets
+import hermes_utils.strings as strings
 
 
 def initialize():
@@ -22,7 +22,7 @@ def initialize():
 
 
 def privileged(chat: telegram.Chat, msg: str, command: str, check_only: bool = True) -> bool:
-    admins = db.fetch_all("SELECT * FROM hestia.subscribers WHERE user_level = 9")
+    admins = db.fetch_all("SELECT * FROM hermes.subscribers WHERE user_level = 9")
     admin_chat_ids = [int(admin["telegram_id"]) for admin in admins]
     
     if chat and chat.id in admin_chat_ids:
@@ -71,7 +71,7 @@ async def new_sub(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, r
 
 async def start(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat: return
-    checksub = db.fetch_one("SELECT * FROM hestia.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
+    checksub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
     
     payload = context.args[0] if context.args else None
     if checksub:
@@ -82,7 +82,7 @@ async def start(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> 
     else:
         await new_sub(update, context)
 
-    if payload and payload.startswith("hestia-web-link-"):
+    if payload and payload.startswith("hermes-web-link-"):
         print(payload)
         print(payload[16:])
         await link(update, context, payload[16:])
@@ -90,7 +90,7 @@ async def start(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def stop(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat: return
-    checksub = db.fetch_one("SELECT * FROM hestia.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
+    checksub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
 
     if checksub:
         if checksub["telegram_enabled"]:
@@ -113,10 +113,10 @@ async def announce(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) 
     if not privileged(update.effective_chat, update.message.text, "announce", check_only=False): return
         
     if db.get_dev_mode():
-        subs = db.fetch_all("SELECT * FROM hestia.subscribers WHERE subscription_expiry IS NOT NULL AND telegram_enabled = true AND user_level > 1")
+        subs = db.fetch_all("SELECT * FROM hermes.subscribers WHERE subscription_expiry IS NOT NULL AND telegram_enabled = true AND user_level > 1")
         await context.bot.send_message(chat_id=update.effective_chat.id, text="Dev mode is enabled, message not broadcasted to all subscribers")
     else:
-        subs = db.fetch_all("SELECT * FROM hestia.subscribers WHERE subscription_expiry IS NOT NULL AND telegram_enabled = true")
+        subs = db.fetch_all("SELECT * FROM hermes.subscribers WHERE subscription_expiry IS NOT NULL AND telegram_enabled = true")
 
     # Remove /announce
     msg = update.message.text[10:]
@@ -152,7 +152,7 @@ async def announce(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def websites(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat: return
-    targets = db.fetch_all("SELECT agency, user_info FROM hestia.targets WHERE enabled = true")
+    targets = db.fetch_all("SELECT agency, user_info FROM hermes.targets WHERE enabled = true")
 
     message = strings.get("websites", update.effective_chat.id)
     
@@ -218,25 +218,25 @@ async def status(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) ->
     else:
         message += f"{meta.CHECK_EMOJI} Scraper: active\n"
 
-    active_sub_count = db.fetch_one("SELECT COUNT(*) FROM hestia.subscribers WHERE telegram_enabled = true")
-    sub_count = db.fetch_one("SELECT COUNT(*) FROM hestia.subscribers")
+    active_sub_count = db.fetch_one("SELECT COUNT(*) FROM hermes.subscribers WHERE telegram_enabled = true")
+    sub_count = db.fetch_one("SELECT COUNT(*) FROM hermes.subscribers")
     message += "\n"
     message += f"Active subscriber count: {active_sub_count['count']}\n"
     message += f"Total subscriber count: {sub_count['count']}\n"
     
-    donation_link = db.fetch_one("SELECT donation_link, donation_link_updated FROM hestia.meta")
+    donation_link = db.fetch_one("SELECT donation_link, donation_link_updated FROM hermes.meta")
     message += "\n"
     message += f"Current donation link: {donation_link['donation_link']}\n"
     message += f"Last updated: {donation_link['donation_link_updated']}\n"
 
-    targets = db.fetch_all("SELECT * FROM hestia.targets")
+    targets = db.fetch_all("SELECT * FROM hermes.targets")
     message += "\n"
     message += "Targets (id): listings in past 7 days\n"
         
     for target in targets:
         agency = target["agency"]
         target_id = target["id"]
-        count = db.fetch_one("SELECT COUNT(*) FROM hestia.homes WHERE agency = %s AND date_added > now() - '1 week'::interval", [agency])
+        count = db.fetch_one("SELECT COUNT(*) FROM hermes.homes WHERE agency = %s AND date_added > now() - '1 week'::interval", [agency])
         message += f"{agency} ({target_id}): {count['count']} listings\n"
 
     await context.bot.send_message(update.effective_chat.id, message, disable_web_page_preview=True)
@@ -259,10 +259,10 @@ async def filter(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     
     # Fetch subscriber from database
-    sub = db.fetch_one("SELECT * FROM hestia.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
+    sub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
     if not sub:
         logging.error(f"Subscriber {update.effective_chat.id} used /filter but is not in database. Msg: {update.message.text}")
-        await context.bot.send_message(update.effective_chat.id, "Couldn't fetch your filter settings, please let @WTFloris know because this is unexpected")
+        await context.bot.send_message(update.effective_chat.id, "Couldn't fetch your filter settings; this is unexpected, please report it")
         return
     
     # '/filter' only
@@ -309,7 +309,7 @@ async def filter(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # View city possibilities
     elif len(cmd) == 2 and cmd[1] == "city":
-        all_filter_cities = [c["city"] for c in db.fetch_all("SELECT DISTINCT city FROM hestia.homes")]
+        all_filter_cities = [c["city"] for c in db.fetch_all("SELECT DISTINCT city FROM hermes.homes")]
         all_filter_cities.sort()
         
         message = strings.get("filter_city_header", update.effective_chat.id)
@@ -324,8 +324,8 @@ async def filter(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Modify agency filter
     elif len(cmd) == 2 and cmd[1] in ["agency", "agencies", "website", "websites"]:
         included, reply_keyboard = [], []
-        enabled_agencies = db.fetch_one("SELECT filter_agencies FROM hestia.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])["filter_agencies"]
-        for row in db.fetch_all("SELECT agency, user_info FROM hestia.targets WHERE enabled = true"):
+        enabled_agencies = db.fetch_one("SELECT filter_agencies FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])["filter_agencies"]
+        for row in db.fetch_all("SELECT agency, user_info FROM hermes.targets WHERE enabled = true"):
             if row["agency"] not in included:
                 included.append(row["agency"])
                 if row["agency"] in enabled_agencies:
@@ -345,11 +345,11 @@ async def filter(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) ->
         city = city[:-1]
         
         # Get cities currently in filter of subscriber
-        sub_filter_cities = db.fetch_one("SELECT filter_cities FROM hestia.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])["filter_cities"]
+        sub_filter_cities = db.fetch_one("SELECT filter_cities FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])["filter_cities"]
         
         if cmd[2] == "add":
             # Get possible cities from database
-            all_filter_cities = [c["city"] for c in db.fetch_all("SELECT DISTINCT city FROM hestia.homes")]
+            all_filter_cities = [c["city"] for c in db.fetch_all("SELECT DISTINCT city FROM hermes.homes")]
             all_filter_cities.sort()
             
             # Check if the city is valid
@@ -425,7 +425,7 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
         cbid, action, agency = query.data.split(".")
         included, reply_keyboard = [], []
 
-        enabled_agencies: set[str] = set(db.fetch_one("SELECT filter_agencies FROM hestia.subscribers WHERE telegram_id = %s", [str(query.message.chat.id)])["filter_agencies"])
+        enabled_agencies: set[str] = set(db.fetch_one("SELECT filter_agencies FROM hermes.subscribers WHERE telegram_id = %s", [str(query.message.chat.id)])["filter_agencies"])
         if action == "d":
             try:
                 enabled_agencies.remove(agency)
@@ -435,7 +435,7 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
             enabled_agencies.add(agency)
         db.set_filter_agencies(query.message.chat, enabled_agencies)
 
-        for row in db.fetch_all("SELECT agency, user_info FROM hestia.targets WHERE enabled = true"):
+        for row in db.fetch_all("SELECT agency, user_info FROM hermes.targets WHERE enabled = true"):
             if row["agency"] not in included:
                 included.append(row["agency"])
                 if row["agency"] in enabled_agencies:
@@ -465,7 +465,7 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
                 return
 
             verdict = db.fetch_one(
-                "SELECT * FROM hestia.enrichment_results "
+                "SELECT * FROM hermes.enrichment_results "
                 "WHERE id LIKE %s AND profile_id = %s",
                 [callback_id + "%", profile["id"]],
             )

@@ -3,14 +3,14 @@
 FROM python:3.11-slim-bookworm
 RUN apt-get update && apt-get install gcc -y
 
-COPY hestia/requirements.txt /bot/requirements.txt
+COPY hermes/requirements.txt /bot/requirements.txt
 RUN pip3 install -r /bot/requirements.txt
 
-COPY hestia /bot/hestia
+COPY hermes /bot/hermes
 
 ARG APP_VERSION
-RUN sed -i "s/APP_VERSION = ''/APP_VERSION = '$APP_VERSION'/g" /bot/hestia/hestia_utils/meta.py
+RUN sed -i "s/APP_VERSION = ''/APP_VERSION = '$APP_VERSION'/g" /bot/hermes/hermes_utils/meta.py
 
-WORKDIR /bot/hestia
-CMD ["python3", "/bot/hestia/bot.py"]
+WORKDIR /bot/hermes
+CMD ["python3", "/bot/hermes/bot.py"]
 # CMD ["sleep", "infinity"]

@@ -3,10 +3,10 @@
 FROM python:3.11-slim-bookworm
 RUN apt-get update && apt-get install cron procps gcc -y && rm -rf /var/lib/apt/lists/*
 
-COPY hestia/requirements.txt /analyzer/requirements.txt
+COPY hermes/requirements.txt /analyzer/requirements.txt
 RUN pip3 install -r /analyzer/requirements.txt
 
-COPY hestia /analyzer/hestia
+COPY hermes /analyzer/hermes
 
 RUN mkdir -p /data
 
@@ -14,6 +14,6 @@ COPY docker/analyzer-cron-entry.sh /analyzer-cron-entry.sh
 RUN chmod +x /analyzer-cron-entry.sh
 
 ARG APP_VERSION
-RUN sed -i "s/APP_VERSION = ''/APP_VERSION = '$APP_VERSION'/g" /analyzer/hestia/hestia_utils/meta.py
+RUN sed -i "s/APP_VERSION = ''/APP_VERSION = '$APP_VERSION'/g" /analyzer/hermes/hermes_utils/meta.py
 
 CMD ["/analyzer-cron-entry.sh"]

@@ -9,11 +9,11 @@ from asyncio import run
 from telegram.error import Forbidden
 from datetime import datetime, timedelta
 
-import hestia_utils.db as db
-import hestia_utils.meta as meta
-import hestia_utils.secrets as secrets
-import hestia_utils.apns as apns
-from hestia_utils.parser import Home, HomeResults
+import hermes_utils.db as db
+import hermes_utils.meta as meta
+import hermes_utils.secrets as secrets
+import hermes_utils.apns as apns
+from hermes_utils.parser import Home, HomeResults
 from enrichment.prefilter import enqueue_for_enrichment
 
 APNS_MAX_RETRIES = 3
@@ -120,7 +120,7 @@ async def main() -> None:
             logging.warning("Dev mode is enabled, not broadcasting thanks messages")
         else:
             subs = db.fetch_all("""
-                SELECT * FROM hestia.subscribers 
+                SELECT * FROM hermes.subscribers 
                 WHERE telegram_enabled = true 
                 AND date_added BETWEEN NOW() - INTERVAL '4 weeks' AND NOW() - INTERVAL '3 weeks'
             """)
@@ -129,9 +129,9 @@ async def main() -> None:
             logging.warning(f"Broadcasting thanks message to {len(subs)} subscribers")
             for sub in subs:
                 sleep(1/29)  # avoid rate limit (broadcasting to max 30 users per second)
-                message = rf"""Thanks for using Hestia, I\'ve put a lot of work into it and I hope it\'s helping you out\!
+                message = rf"""Thanks for using Hermes, I\'ve put a lot of work into it and I hope it\'s helping you out\!
                 
-Moving is expensive enough and similar scraping services start at like €20/month\. Hopefully Hestia has helped you save some money\! With this open Tikkie you could use some of those savings to [buy me a beer]({donation_link}) {meta.LOVE_EMOJI}
+Moving is expensive enough and similar scraping services start at like €20/month\. Hopefully Hermes has helped you save some money\! With this open Tikkie you could use some of those savings to [buy me a beer]({donation_link}) {meta.LOVE_EMOJI}
 
 Good luck in your search\!"""
                 try:
@@ -142,7 +142,7 @@ Good luck in your search\!"""
     
     if not db.get_scraper_halted():
         scrape_start_ts = datetime.now()
-        for target in db.fetch_all("SELECT * FROM hestia.targets WHERE enabled = true"):
+        for target in db.fetch_all("SELECT * FROM hermes.targets WHERE enabled = true"):
             try:
                 await scrape_site(target)
             except BaseException as e:
@@ -162,13 +162,13 @@ async def broadcast(homes: list[Home]) -> None:
     
     if db.get_dev_mode():
         subs = db.fetch_all(
-            "SELECT * FROM hestia.subscribers WHERE (telegram_enabled = true OR apns_token IS NOT NULL) AND user_level > 1"
+            "SELECT * FROM hermes.subscribers WHERE (telegram_enabled = true OR apns_token IS NOT NULL) AND user_level > 1"
         )
     else:
-        subs = db.fetch_all("SELECT * FROM hestia.subscribers WHERE telegram_enabled = true OR apns_token IS NOT NULL")
+        subs = db.fetch_all("SELECT * FROM hermes.subscribers WHERE telegram_enabled = true OR apns_token IS NOT NULL")
         
     # Create dict of agencies and their pretty names
-    agencies = db.fetch_all("SELECT agency, user_info FROM hestia.targets")
+    agencies = db.fetch_all("SELECT agency, user_info FROM hermes.targets")
     agencies = dict([(a["agency"], a["user_info"]["agency"]) for a in agencies])
     
     for home in homes:
@@ -264,7 +264,7 @@ async def scrape_site(target: dict) -> None:
         new_homes: list[Home] = []
         
         # Check retrieved homes against previously scraped homes (of the last 6 months)
-        for home in db.fetch_all("SELECT address, city FROM hestia.homes WHERE date_added > now() - interval '180 day'"):
+        for home in db.fetch_all("SELECT address, city FROM hermes.homes WHERE date_added > now() - interval '180 day'"):
             prev_homes.append(Home(home["address"], home["city"]))
         for home in HomeResults(target["agency"], r):
             if home not in prev_homes:

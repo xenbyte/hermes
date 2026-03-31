@@ -6,26 +6,26 @@ Read `@plans/context.md` first for full project context.
 
 Build the foundation that all other agents depend on:
 1. SQL migration files for the 4 new tables
-2. `hestia/enrichment/profile.py` — profile DB access + Claude system prompt builder
-3. `hestia/enrichment/queue.py` — enrichment queue DB operations
-4. `hestia/enrichment/costs.py` — LLM token tracking + budget guard
-5. `hestia/enrichment/__init__.py` — empty init
+2. `hermes/enrichment/profile.py` — profile DB access + Claude system prompt builder
+3. `hermes/enrichment/queue.py` — enrichment queue DB operations
+4. `hermes/enrichment/costs.py` — LLM token tracking + budget guard
+5. `hermes/enrichment/__init__.py` — empty init
 
 ## Files to Read First
 
-- `hestia/hestia_utils/db.py` — Follow the exact same patterns: `get_connection()`, `fetch_one()`, `fetch_all()`, `_write()`. Use `psycopg2` with `RealDictCursor`. Never bare `except`.
-- `hestia/hestia_utils/secrets.py` (template at `misc/secrets.py.template`) — understand DB connection config.
-- `misc/hestia.ddl` — existing schema for reference.
+- `hermes/hermes_utils/db.py` — Follow the exact same patterns: `get_connection()`, `fetch_one()`, `fetch_all()`, `_write()`. Use `psycopg2` with `RealDictCursor`. Never bare `except`.
+- `hermes/hermes_utils/secrets.py` (template at `misc/secrets.py.template`) — understand DB connection config.
+- `misc/hermes.ddl` — existing schema for reference.
 
 ## Files to Create
 
 ### 1. `misc/sql/enrichment_schema.sql`
 
 Contains all 4 `CREATE TABLE` statements from the context doc:
-- `hestia.user_profiles`
-- `hestia.enrichment_queue`
-- `hestia.enrichment_results`
-- `hestia.llm_usage`
+- `hermes.user_profiles`
+- `hermes.enrichment_queue`
+- `hermes.enrichment_results`
+- `hermes.llm_usage`
 
 Add an index on `enrichment_queue(status, enqueued_at)` for the drain query.
 Add an index on `enrichment_results(profile_id, score)` for filtered lookups.
@@ -33,13 +33,13 @@ Add an index on `llm_usage(called_at)` for daily spend queries.
 
 Use `IF NOT EXISTS` on all `CREATE TABLE` statements.
 
-### 2. `hestia/enrichment/__init__.py`
+### 2. `hermes/enrichment/__init__.py`
 
 Empty file.
 
-### 3. `hestia/enrichment/profile.py`
+### 3. `hermes/enrichment/profile.py`
 
-Follow `db.py` patterns exactly: import `get_connection` from `hestia_utils.db`, use `RealDictCursor`.
+Follow `db.py` patterns exactly: import `get_connection` from `hermes_utils.db`, use `RealDictCursor`.
 
 ```python
 def get_profiles_with_enrichment() -> list[dict]:
@@ -74,11 +74,11 @@ def build_system_prompt(profile: dict) -> str:
     """
 ```
 
-### 4. `hestia/enrichment/queue.py`
+### 4. `hermes/enrichment/queue.py`
 
 ```python
 import hashlib
-from hestia_utils.db import get_connection, fetch_one, fetch_all, _write
+from hermes_utils.db import get_connection, fetch_one, fetch_all, _write
 
 def _make_id(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()
@@ -107,7 +107,7 @@ def update_page_text(queue_id: str, text: str, method: str) -> None:
 
 Important: `drain_pending()` must be atomic — SELECT + UPDATE in one transaction to prevent race conditions if two analyzer instances run.
 
-### 5. `hestia/enrichment/costs.py`
+### 5. `hermes/enrichment/costs.py`
 
 ```python
 HAIKU_INPUT_COST_PER_M = 0.80    # $/million tokens
@@ -124,7 +124,7 @@ def _estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Calculate cost in dollars."""
 
 def log_usage(batch_id: str, model: str, input_tokens: int, output_tokens: int) -> None:
-    """INSERT into hestia.llm_usage with estimated_cost."""
+    """INSERT into hermes.llm_usage with estimated_cost."""
 
 def get_daily_spend() -> float:
     """SUM(estimated_cost) FROM llm_usage WHERE called_at >= today midnight."""

@@ -3,7 +3,7 @@ import logging
 
 from psycopg2.extras import RealDictCursor
 
-from hestia_utils.db import get_connection, _write
+from hermes_utils.db import get_connection, _write
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def enqueue(home, profile_id: int) -> bool:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO hestia.enrichment_queue "
+                "INSERT INTO hermes.enrichment_queue "
                 "(id, profile_id, url, address, city, price, agency, sqm) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (id, profile_id) DO NOTHING",
@@ -47,10 +47,10 @@ def drain_pending(limit: int = 50) -> list[dict]:
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "UPDATE hestia.enrichment_queue "
+                "UPDATE hermes.enrichment_queue "
                 "SET status = 'processing' "
                 "WHERE (id, profile_id) IN ("
-                "  SELECT id, profile_id FROM hestia.enrichment_queue "
+                "  SELECT id, profile_id FROM hermes.enrichment_queue "
                 "  WHERE status = 'pending' "
                 "  ORDER BY enqueued_at "
                 "  LIMIT %s "
@@ -73,7 +73,7 @@ def drain_pending(limit: int = 50) -> list[dict]:
 def mark_done(queue_id: str, profile_id: int) -> None:
     """Set status='done'."""
     _write(
-        "UPDATE hestia.enrichment_queue SET status = 'done' "
+        "UPDATE hermes.enrichment_queue SET status = 'done' "
         "WHERE id = %s AND profile_id = %s",
         [queue_id, profile_id],
     )
@@ -82,7 +82,7 @@ def mark_done(queue_id: str, profile_id: int) -> None:
 def mark_failed(queue_id: str, profile_id: int, reason: str) -> None:
     """Set status='failed' and log reason."""
     _write(
-        "UPDATE hestia.enrichment_queue SET status = 'failed' "
+        "UPDATE hermes.enrichment_queue SET status = 'failed' "
         "WHERE id = %s AND profile_id = %s",
         [queue_id, profile_id],
     )
@@ -92,7 +92,7 @@ def mark_failed(queue_id: str, profile_id: int, reason: str) -> None:
 def increment_retry(queue_id: str, profile_id: int) -> None:
     """Increment retry_count and reset status to 'pending'."""
     _write(
-        "UPDATE hestia.enrichment_queue "
+        "UPDATE hermes.enrichment_queue "
         "SET retry_count = retry_count + 1, status = 'pending' "
         "WHERE id = %s AND profile_id = %s",
         [queue_id, profile_id],
@@ -102,7 +102,7 @@ def increment_retry(queue_id: str, profile_id: int) -> None:
 def update_page_text(queue_id: str, profile_id: int, text: str, method: str) -> None:
     """Store fetched page text and fetch method on the queue row."""
     _write(
-        "UPDATE hestia.enrichment_queue "
+        "UPDATE hermes.enrichment_queue "
         "SET page_text = %s, fetch_method = %s "
         "WHERE id = %s AND profile_id = %s",
         [text, method, queue_id, profile_id],

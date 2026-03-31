@@ -1,4 +1,4 @@
-from hestia_utils.meta import escape_markdownv2
+from hermes_utils.meta import escape_markdownv2
 
 
 class TestEscapeMarkdownV2:

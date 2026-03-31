@@ -1,7 +1,7 @@
 import logging
 import telegram
 
-from hestia_utils.secrets import TOKEN
+from hermes_utils.secrets import TOKEN
 
 def escape_markdownv2(text: str) -> str:
     text = text.replace('.', r'\.')
@@ -17,7 +17,7 @@ def escape_markdownv2(text: str) -> str:
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s]: %(message)s",
     level=logging.WARNING,
-    filename="/data/hestia.log"
+    filename="/data/hermes.log"
 )
 
 BOT = telegram.Bot(TOKEN)

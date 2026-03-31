@@ -5,7 +5,7 @@ import uuid
 
 import anthropic
 
-from hestia_utils.db import fetch_one, _write
+from hermes_utils.db import fetch_one, _write
 from enrichment.profile import build_system_prompt
 from enrichment.costs import log_usage
 
@@ -19,7 +19,7 @@ def _get_cached_letter(result_id: str, profile_id: int, language: str) -> str | 
     """Return cached letter text from enrichment_results, or None."""
     col = f"letter_{language}"
     row = fetch_one(
-        f"SELECT {col} FROM hestia.enrichment_results "
+        f"SELECT {col} FROM hermes.enrichment_results "
         "WHERE id = %s AND profile_id = %s",
         [result_id, profile_id],
     )
@@ -30,7 +30,7 @@ def _cache_letter(result_id: str, profile_id: int, language: str, letter: str) -
     """Persist generated letter into the enrichment_results cache column."""
     col = f"letter_{language}"
     _write(
-        f"UPDATE hestia.enrichment_results SET {col} = %s "
+        f"UPDATE hermes.enrichment_results SET {col} = %s "
         "WHERE id = %s AND profile_id = %s",
         [letter, result_id, profile_id],
     )

@@ -62,7 +62,7 @@ RECENT_LOGIN_WINDOW_SECONDS = 10
 RECENT_LOGIN_REQUESTS = {}
 RECENT_LOGIN_MAX_ENTRIES = 10000
 SESSION_MAX_AGE = 365 * 24 * 60 * 60  # 1 year
-SESSION_COOKIE_NAME = "hestia_session"
+SESSION_COOKIE_NAME = "hermes_session"
 DEVICE_ID_HEADER = "X-Device-Id"
 
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
@@ -73,7 +73,7 @@ serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
 # Configure logging with INFO level and JSON format support
 log_format = os.getenv("LOG_FORMAT", "plain")  # "json" for production, "plain" for dev
-logger = logging.getLogger("hestia")
+logger = logging.getLogger("hermes")
 logger.setLevel(logging.INFO)
 
 # Remove any existing handlers to avoid duplicates
@@ -311,7 +311,7 @@ def resolve_subscriber_by_device_id():
         with get_db() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
-                    "SELECT * FROM hestia.subscribers WHERE device_id = %s",
+                    "SELECT * FROM hermes.subscribers WHERE device_id = %s",
                     (normalized_device_id,),
                 )
                 subscriber = cur.fetchone()
@@ -362,7 +362,7 @@ def device_auth_required(f):
 
 def _load_available_cities_and_agencies(cur):
     """Load available filter options shared by dashboard and API endpoints."""
-    cur.execute("SELECT DISTINCT city FROM hestia.homes")
+    cur.execute("SELECT DISTINCT city FROM hermes.homes")
     raw_cities = [row["city"] for row in cur.fetchall() if row["city"]]
     city_map = {}
     for city in raw_cities:
@@ -380,7 +380,7 @@ def _load_available_cities_and_agencies(cur):
     cur.execute(
         """
         SELECT DISTINCT ON (agency) agency, user_info
-        FROM hestia.targets
+        FROM hermes.targets
         WHERE enabled = true
         ORDER BY agency
         """
@@ -409,17 +409,17 @@ def resolve_api_subscriber():
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                     cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (email,))
                     cur.execute(
-                        "SELECT * FROM hestia.subscribers WHERE email_address = %s ORDER BY id",
+                        "SELECT * FROM hermes.subscribers WHERE email_address = %s ORDER BY id",
                         (email,),
                     )
                     subscriber = cur.fetchone()
                     if subscriber is None:
                         cur.execute(
-                            "INSERT INTO hestia.subscribers (email_address) VALUES (%s)",
+                            "INSERT INTO hermes.subscribers (email_address) VALUES (%s)",
                             (email,),
                         )
                         cur.execute(
-                            "SELECT * FROM hestia.subscribers WHERE email_address = %s ORDER BY id",
+                            "SELECT * FROM hermes.subscribers WHERE email_address = %s ORDER BY id",
                             (email,),
                         )
                         subscriber = cur.fetchone()
@@ -611,7 +611,7 @@ def insert_link_code_with_retry(cursor, email: str, max_attempts: int = 10) -> s
         code = generate_link_code()
 
         cursor.execute(
-            """INSERT INTO hestia.link_codes (code, email_address, expires_at)
+            """INSERT INTO hermes.link_codes (code, email_address, expires_at)
                VALUES (%s, %s, %s)
                ON CONFLICT (code) DO NOTHING""",
             (code, email, expires_at),
@@ -723,12 +723,12 @@ def login():
             with conn.cursor() as cur:
                 # Clean up expired tokens for this email
                 cur.execute(
-                    "DELETE FROM hestia.magic_tokens WHERE email_address = %s AND expires_at < %s",
+                    "DELETE FROM hermes.magic_tokens WHERE email_address = %s AND expires_at < %s",
                     (email, datetime.now(timezone.utc)),
                 )
                 # Store the new token
                 cur.execute(
-                    "INSERT INTO hestia.magic_tokens (token_id, email_address, expires_at) VALUES (%s, %s, %s)",
+                    "INSERT INTO hermes.magic_tokens (token_id, email_address, expires_at) VALUES (%s, %s, %s)",
                     (token_id, email, expires_at),
                 )
     except psycopg2.Error as e:
@@ -753,8 +753,8 @@ def login():
     api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
         to=[{"email": email}],
-        sender={"email": app.config["FROM_EMAIL"], "name": "Hestia"},
-        subject="Your Hestia login link",
+        sender={"email": app.config["FROM_EMAIL"], "name": "Hermes"},
+        subject="Your Hermes login link",
         html_content=email_html,
     )
     try:
@@ -806,7 +806,7 @@ def auth(token):
         with get_db() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
-                    """DELETE FROM hestia.magic_tokens
+                    """DELETE FROM hermes.magic_tokens
                        WHERE token_id = %s AND email_address = %s AND expires_at > %s
                        RETURNING token_id""",
                     (token_id, email, datetime.now(timezone.utc)),
@@ -851,7 +851,7 @@ def dashboard():
                 cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (request.email,))
 
                 cur.execute(
-                    "SELECT * FROM hestia.subscribers WHERE email_address = %s",
+                    "SELECT * FROM hermes.subscribers WHERE email_address = %s",
                     (request.email,),
                 )
                 subscriber = cur.fetchone()
@@ -861,11 +861,11 @@ def dashboard():
                 if subscriber is None:
                     is_new_user = True
                     cur.execute(
-                        "INSERT INTO hestia.subscribers (email_address) VALUES (%s)",
+                        "INSERT INTO hermes.subscribers (email_address) VALUES (%s)",
                         (request.email,),
                     )
                     cur.execute(
-                        "SELECT * FROM hestia.subscribers WHERE email_address = %s",
+                        "SELECT * FROM hermes.subscribers WHERE email_address = %s",
                         (request.email,),
                     )
                     subscriber = cur.fetchone()
@@ -909,7 +909,7 @@ def link_telegram_page():
         with get_db() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
-                    "SELECT id FROM hestia.subscribers WHERE email_address = %s AND telegram_id IS NOT NULL",
+                    "SELECT id FROM hermes.subscribers WHERE email_address = %s AND telegram_id IS NOT NULL",
                     (email,),
                 )
                 row = cur.fetchone()
@@ -920,7 +920,7 @@ def link_telegram_page():
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "DELETE FROM hestia.link_codes WHERE email_address = %s", (email,)
+                    "DELETE FROM hermes.link_codes WHERE email_address = %s", (email,)
                 )
                 code = insert_link_code_with_retry(cur, email)
 
@@ -957,7 +957,7 @@ def api_link_code():
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "DELETE FROM hestia.link_codes WHERE email_address = %s",
+                    "DELETE FROM hermes.link_codes WHERE email_address = %s",
                     (request.email,),
                 )
                 code = insert_link_code_with_retry(cur, request.email)
@@ -986,7 +986,7 @@ def link_telegram_check():
         with get_db() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
-                    "SELECT * FROM hestia.subscribers WHERE email_address = %s ORDER BY id",
+                    "SELECT * FROM hermes.subscribers WHERE email_address = %s ORDER BY id",
                     (email,),
                 )
                 rows = cur.fetchall()
@@ -1003,7 +1003,7 @@ def link_telegram_check():
                 if telegram_row is not None and email_only_row is not None:
                     # Merge: copy telegram data to the email-only row, delete telegram row
                     cur.execute(
-                        """UPDATE hestia.subscribers
+                        """UPDATE hermes.subscribers
                            SET telegram_id = %s,
                                telegram_enabled = %s,
                                filter_min_price = %s,
@@ -1024,7 +1024,7 @@ def link_telegram_check():
                         ),
                     )
                     cur.execute(
-                        "DELETE FROM hestia.subscribers WHERE id = %s",
+                        "DELETE FROM hermes.subscribers WHERE id = %s",
                         (telegram_row["id"],),
                     )
                     logger.info(
@@ -1100,9 +1100,9 @@ def update_filters():
         with get_db() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 # Fetch the user's current filter_agencies so we can preserve
-                # agencies that are disabled in hestia.targets (hidden from UI).
+                # agencies that are disabled in hermes.targets (hidden from UI).
                 cur.execute(
-                    "SELECT filter_agencies FROM hestia.subscribers WHERE email_address = %s",
+                    "SELECT filter_agencies FROM hermes.subscribers WHERE email_address = %s",
                     (request.email,),
                 )
                 row = cur.fetchone()
@@ -1110,7 +1110,7 @@ def update_filters():
 
                 # Get currently enabled agency IDs (the ones shown in the form)
                 cur.execute(
-                    "SELECT agency FROM hestia.targets WHERE enabled = true"
+                    "SELECT agency FROM hermes.targets WHERE enabled = true"
                 )
                 enabled_agency_ids = {r["agency"] for r in cur.fetchall()}
 
@@ -1125,7 +1125,7 @@ def update_filters():
 
                 cur.execute(
                     """
-                    UPDATE hestia.subscribers
+                    UPDATE hermes.subscribers
                     SET telegram_enabled = %s,
                         filter_min_price = %s,
                         filter_max_price = %s,
@@ -1197,7 +1197,7 @@ def api_homes():
                 where = " AND ".join(conditions)
 
                 cur.execute(
-                    f"SELECT COUNT(*) AS cnt FROM hestia.homes h WHERE {where}",
+                    f"SELECT COUNT(*) AS cnt FROM hermes.homes h WHERE {where}",
                     params,
                 )
                 total = cur.fetchone()["cnt"]
@@ -1212,9 +1212,9 @@ def api_homes():
                         h.sqm,
                         COALESCE(t.user_info->>'agency', h.agency) AS agency,
                         h.date_added
-                    FROM hestia.homes h
+                    FROM hermes.homes h
                     LEFT JOIN LATERAL (
-                        SELECT user_info FROM hestia.targets t2
+                        SELECT user_info FROM hermes.targets t2
                         WHERE t2.agency = h.agency LIMIT 1
                     ) t ON true
                     WHERE {where}
@@ -1296,7 +1296,7 @@ def api_register_device():
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    INSERT INTO hestia.subscribers (device_id, apns_token)
+                    INSERT INTO hermes.subscribers (device_id, apns_token)
                     VALUES (%s, %s)
                     ON CONFLICT (device_id) DO NOTHING
                     RETURNING id
@@ -1441,7 +1441,7 @@ def api_filters():
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    UPDATE hestia.subscribers
+                    UPDATE hermes.subscribers
                     SET apns_token = CASE WHEN %s THEN apns_token ELSE NULL END,
                         filter_min_price = %s,
                         filter_max_price = %s,
@@ -1513,7 +1513,7 @@ def api_device_token():
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "UPDATE hestia.subscribers SET apns_token = %s WHERE id = %s",
+                    "UPDATE hermes.subscribers SET apns_token = %s WHERE id = %s",
                     (apns_token, request.subscriber_id),
                 )
     except psycopg2.Error as e:
@@ -1733,7 +1733,7 @@ def _preview_cache_get(url):
                 cur.execute(
                     """
                     SELECT url, status, image_url, image_bytes, content_type, expires_at
-                    FROM hestia.preview_cache
+                    FROM hermes.preview_cache
                     WHERE url = %s
                     """,
                     (url,),
@@ -1742,7 +1742,7 @@ def _preview_cache_get(url):
                 if not row:
                     return None
                 if row["expires_at"] and row["expires_at"] <= now:
-                    cur.execute("DELETE FROM hestia.preview_cache WHERE url = %s", (url,))
+                    cur.execute("DELETE FROM hermes.preview_cache WHERE url = %s", (url,))
                     return None
                 return row
     except psycopg2.Error:
@@ -1758,7 +1758,7 @@ def _preview_cache_set(url, status, ttl, image_url=None, image_bytes=None, conte
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO hestia.preview_cache
+                    INSERT INTO hermes.preview_cache
                         (url, status, image_url, image_bytes, content_type, fetched_at, expires_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (url) DO UPDATE
@@ -1875,8 +1875,8 @@ def api_preview_image_raw():
 
 @app.route("/avatar")
 def avatar():
-    """Serve the Hestia avatar image."""
-    return send_from_directory(app.static_folder, "hestia.jpeg")
+    """Serve the avatar image."""
+    return send_from_directory(app.static_folder, "hermes.jpeg")
 
 
 @app.route("/api/statistics")
@@ -1887,29 +1887,29 @@ def api_statistics():
     try:
         with get_db() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute("SELECT COUNT(*) AS cnt FROM hestia.homes")
+                cur.execute("SELECT COUNT(*) AS cnt FROM hermes.homes")
                 total_homes = cur.fetchone()["cnt"]
 
                 cur.execute(
-                    "SELECT COUNT(*) AS cnt FROM hestia.homes WHERE date_added >= NOW() - INTERVAL '24 hours'"
+                    "SELECT COUNT(*) AS cnt FROM hermes.homes WHERE date_added >= NOW() - INTERVAL '24 hours'"
                 )
                 homes_today = cur.fetchone()["cnt"]
 
                 cur.execute(
-                    "SELECT city, COUNT(*) AS count FROM hestia.homes GROUP BY city ORDER BY count DESC LIMIT 5"
+                    "SELECT city, COUNT(*) AS count FROM hermes.homes GROUP BY city ORDER BY count DESC LIMIT 5"
                 )
                 top_cities = [{"city": r["city"], "count": r["count"]} for r in cur.fetchall()]
 
                 cur.execute(
-                    "SELECT agency, COUNT(*) AS count FROM hestia.homes WHERE agency IS NOT NULL GROUP BY agency ORDER BY count DESC LIMIT 5"
+                    "SELECT agency, COUNT(*) AS count FROM hermes.homes WHERE agency IS NOT NULL GROUP BY agency ORDER BY count DESC LIMIT 5"
                 )
                 top_agencies = [{"agency": r["agency"], "count": r["count"]} for r in cur.fetchall()]
 
-                cur.execute("SELECT COUNT(*) AS cnt FROM hestia.subscribers")
+                cur.execute("SELECT COUNT(*) AS cnt FROM hermes.subscribers")
                 total_subscribers = cur.fetchone()["cnt"]
 
                 cur.execute(
-                    "SELECT COUNT(*) AS cnt FROM hestia.subscribers WHERE date_added >= date_trunc('month', CURRENT_DATE)"
+                    "SELECT COUNT(*) AS cnt FROM hermes.subscribers WHERE date_added >= date_trunc('month', CURRENT_DATE)"
                 )
                 subscribers_this_month = cur.fetchone()["cnt"]
 
@@ -1937,7 +1937,7 @@ def donation_link():
     try:
         with get_db() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute("SELECT donation_link FROM hestia.meta WHERE id = 'default'")
+                cur.execute("SELECT donation_link FROM hermes.meta WHERE id = 'default'")
                 row = cur.fetchone()
         url = row["donation_link"] if row else None
         if url:
@@ -2007,7 +2007,7 @@ atexit.register(close_db_pool)
 
 if __name__ == "__main__":
     logger.info(
-        "Starting Hestia web",
+        "Starting Hermes web",
         extra={
             "host": "0.0.0.0",
             "port": 5050,

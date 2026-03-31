@@ -1,6 +1,6 @@
 import json
 import pytest
-from hestia_utils.parser import Home, HomeResults
+from hermes_utils.parser import Home, HomeResults
 
 
 class TestHomeResultsUnknownSource:

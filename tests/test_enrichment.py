@@ -281,7 +281,7 @@ class TestEnrichedMessage:
     @pytest.mark.asyncio
     async def test_high_score_message_format(self):
         from enrichment.analyzer import _send_enriched_message
-        import hestia_utils.meta as meta
+        import hermes_utils.meta as meta
 
         mock_send = AsyncMock()
         meta.BOT.send_message = mock_send
@@ -316,7 +316,7 @@ class TestEnrichedMessage:
     @pytest.mark.asyncio
     async def test_low_score_compact_format(self):
         from enrichment.analyzer import _send_low_score_summary
-        import hestia_utils.meta as meta
+        import hermes_utils.meta as meta
 
         mock_send = AsyncMock()
         meta.BOT.send_message = mock_send
@@ -343,7 +343,7 @@ class TestEnrichedMessage:
     @pytest.mark.asyncio
     async def test_low_score_empty_list_sends_nothing(self):
         from enrichment.analyzer import _send_low_score_summary
-        import hestia_utils.meta as meta
+        import hermes_utils.meta as meta
 
         mock_send = AsyncMock()
         meta.BOT.send_message = mock_send

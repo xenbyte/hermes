@@ -14,7 +14,7 @@ try:
 except ImportError:  # pragma: no cover - exercised only when dependency is missing
     jwt = None
 
-import hestia_utils.secrets as secrets
+import hermes_utils.secrets as secrets
 
 
 logger = logging.getLogger(__name__)

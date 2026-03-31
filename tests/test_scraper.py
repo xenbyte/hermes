@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from datetime import datetime
 
-from hestia_utils.parser import Home
+from hermes_utils.parser import Home
 
 
 class TestScrapeSite:

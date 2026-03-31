@@ -1,6 +1,6 @@
 import logging
 
-from hestia_utils.parser import Home
+from hermes_utils.parser import Home
 from enrichment.profile import get_profiles_with_enrichment
 from enrichment.queue import enqueue
 

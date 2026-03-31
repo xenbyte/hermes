@@ -4,12 +4,12 @@ import json
 import types
 from unittest.mock import MagicMock
 
-# Add hestia source directory to sys.path
-hestia_dir = os.path.join(os.path.dirname(__file__), '..', 'hestia')
-sys.path.insert(0, hestia_dir)
+# Add hermes source directory to sys.path
+hermes_dir = os.path.join(os.path.dirname(__file__), '..', 'hermes')
+sys.path.insert(0, hermes_dir)
 
-# Mock the secrets module before any hestia imports
-mock_secrets = types.ModuleType('hestia_utils.secrets')
+# Mock the secrets module before any hermes imports
+mock_secrets = types.ModuleType('hermes_utils.secrets')
 mock_secrets.TOKEN = "fake-token-for-testing"
 mock_secrets.DB = {
     "database": "test_db",
@@ -21,9 +21,9 @@ mock_secrets.DB = {
 mock_secrets.OWN_CHAT_ID = 12345
 mock_secrets.PRIVILEGED_USERS = [12345]
 mock_secrets.WORKDIR = "/tmp/"
-sys.modules['hestia_utils.secrets'] = mock_secrets
+sys.modules['hermes_utils.secrets'] = mock_secrets
 
-# Patch logging.basicConfig to avoid writing to /data/hestia.log
+# Patch logging.basicConfig to avoid writing to /data/hermes.log
 import logging
 _original_basicConfig = logging.basicConfig
 def _patched_basicConfig(**kwargs):

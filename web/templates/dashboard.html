@@ -8,11 +8,11 @@
 <div class="header" style="display:flex;align-items:flex-start;gap:0.75rem">
     <div style="min-width:0;flex:1">
         <div class="dashboard-title-row">
-            <h1 data-i18n="dashboard_title">Your Hestia homes</h1>
+            <h1 data-i18n="dashboard_title">Your Hermes homes</h1>
         </div>
         <p class="subtitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span data-i18n="logged_in_as">Logged in as</span> <span class="logout-email" data-logout-url="/logout" data-i18n-confirm="logout_confirm"><strong>{{ email }}</strong></span></p>
     </div>
-    <img src="/avatar" alt="Hestia" style="width:72px;height:72px;border-radius:50%;object-fit:cover;cursor:pointer;flex-shrink:0" data-modal="contact">
+    <img src="/avatar" alt="Hermes" style="width:72px;height:72px;border-radius:50%;object-fit:cover;cursor:pointer;flex-shrink:0" data-modal="contact">
 </div>
 
 <div class="dashboard-grid">
@@ -55,7 +55,7 @@
                             </div>
                         </fieldset>
                         <fieldset>
-                            <legend><span data-i18n="price_range_legend">Price range</span> <button type="button" class="info-btn" data-info-key="price_range_info" data-info="Hestia will send you homes within this range."><span>i</span><span class="info-bubble"></span></button></legend>
+                            <legend><span data-i18n="price_range_legend">Price range</span> <button type="button" class="info-btn" data-info-key="price_range_info" data-info="Hermes will send you homes within this range."><span>i</span><span class="info-bubble"></span></button></legend>
                             <div class="price-row">
                                 <label>
                                     <span data-i18n="price_min_label">Minimum</span>
@@ -89,7 +89,7 @@
                             </div>
                         </fieldset>
                         <fieldset>
-                            <legend><span data-i18n="agencies_legend">Agencies</span> <button type="button" class="info-btn" data-info-key="agencies_info" data-info="Hestia will only send you homes from these agencies.&lt;br&gt;&lt;br&gt;Agency missing? It's possible that an integration with an agency website is broken. The agency will be temporarily unavailable until a fix can be deployed."><span>i</span><span class="info-bubble"></span></button></legend>
+                            <legend><span data-i18n="agencies_legend">Agencies</span> <button type="button" class="info-btn" data-info-key="agencies_info" data-info="Hermes will only send you homes from these agencies.&lt;br&gt;&lt;br&gt;Agency missing? It's possible that an integration with an agency website is broken. The agency will be temporarily unavailable until a fix can be deployed."><span>i</span><span class="info-bubble"></span></button></legend>
                             <input type="text" class="toggle-search" placeholder="Search agencies…" data-i18n-placeholder="agencies_search" data-list="agency-list" autocomplete="off" spellcheck="false">
                             <div class="toggle-list" id="agency-list">
                             {% for agency in available_agencies %}
@@ -102,7 +102,7 @@
                             </div>
                         </fieldset>
                         <fieldset>
-                            <legend><span data-i18n="cities_legend">Cities</span> <button type="button" class="info-btn" data-info-key="cities_info" data-info="Hestia will only send you homes within these cities.&lt;br&gt;&lt;br&gt;City missing? These are all cities Hestia has seen so far online. Newly seen cities will be added automatically."><span>i</span><span class="info-bubble"></span></button></legend>
+                            <legend><span data-i18n="cities_legend">Cities</span> <button type="button" class="info-btn" data-info-key="cities_info" data-info="Hermes will only send you homes within these cities.&lt;br&gt;&lt;br&gt;City missing? These are all cities Hermes has seen so far online. Newly seen cities will be added automatically."><span>i</span><span class="info-bubble"></span></button></legend>
 
                             <!-- Selected cities as chips -->
                             <div class="city-chips" id="city-chips">
@@ -163,7 +163,7 @@
             <p data-i18n="homes_empty">No homes match your current filters. Try adjusting your settings.</p>
         </div>
 
-        <p id="homes-limit-msg" class="homes-limit-msg" style="display:none" data-i18n="homes_limit_reached">There may be more results, but Hestia can only look back this far.</p>
+        <p id="homes-limit-msg" class="homes-limit-msg" style="display:none" data-i18n="homes_limit_reached">There may be more results, but Hermes can only look back this far.</p>
         <p id="homes-end-msg" class="homes-limit-msg" style="display:none" data-i18n="homes_end_reached">You’ve seen everything!</p>
     </section>
 </div>
@@ -180,7 +180,7 @@
                     <a id="telegram-open-btn" class="btn" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:0.4rem" data-i18n="link_open_telegram">Open Telegram</a>
                 </div>
                 <p style="font-size:0.8rem;color:var(--subtitle);margin-bottom:0.25rem" data-i18n="link_manual_alt">Or send this manually:</p>
-                <p style="font-size:0.85rem;margin-bottom:0"><code id="telegram-link-command" style="cursor:pointer;user-select:none" title="Click to copy" data-i18n-title="link_copy_title">/link ...</code> <span data-i18n="link_to">to</span> <a href="https://t.me/hestia_homes_bot" target="_blank">@hestia_homes_bot</a></p>
+                <p style="font-size:0.85rem;margin-bottom:0"><code id="telegram-link-command" style="cursor:pointer;user-select:none" title="Click to copy" data-i18n-title="link_copy_title">/link ...</code> <span data-i18n="link_to">to</span> <a href="https://t.me/YOUR_TELEGRAM_BOT" target="_blank" rel="noopener noreferrer">@your_telegram_bot</a></p>
                 <p id="telegram-copy-message" style="display:none;color:var(--primary);font-size:0.85rem;font-weight:600;margin-top:0.5rem" data-i18n="link_copied">Copied to clipboard!</p>
             </div>
             <div id="telegram-code-expired" style="display:none;text-align:center">

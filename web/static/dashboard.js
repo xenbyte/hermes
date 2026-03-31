@@ -348,8 +348,8 @@ function syncFiltersForViewport() {
             var max = maxInput.value;
             if (min !== '' && max !== '' && Number(max) < Number(min)) {
                 priceWarning.style.display = '';
-                var lang = hestiaGetLang();
-                var dict = HESTIA_I18N[lang] || {};
+                var lang = hermesGetLang();
+                var dict = HERMES_I18N[lang] || {};
                 priceWarning.textContent = dict['price_warning'] || 'Minimum is higher than maximum';
             } else {
                 priceWarning.style.display = 'none';
@@ -408,8 +408,8 @@ function syncFiltersForViewport() {
             cityDropdown.style.display = 'none';
 
             // Trigger save
-            if (typeof window.hestiaDebouncedSave === 'function') {
-                window.hestiaDebouncedSave();
+            if (typeof window.hermesDebouncedSave === 'function') {
+                window.hermesDebouncedSave();
             }
         }
 
@@ -429,8 +429,8 @@ function syncFiltersForViewport() {
             });
 
             // Trigger save
-            if (typeof window.hestiaDebouncedSave === 'function') {
-                window.hestiaDebouncedSave();
+            if (typeof window.hermesDebouncedSave === 'function') {
+                window.hermesDebouncedSave();
             }
         }
 
@@ -557,8 +557,8 @@ function syncFiltersForViewport() {
         [errorTop, errorBottom].filter(Boolean).forEach(function(el) {
             el.setAttribute('data-i18n', key);
         });
-        if (typeof hestiaApplyLang === 'function') {
-            hestiaApplyLang(hestiaGetLang());
+        if (typeof hermesApplyLang === 'function') {
+            hermesApplyLang(hermesGetLang());
         }
     }
 
@@ -743,7 +743,7 @@ function syncFiltersForViewport() {
     }
 
     // Make debouncedSave available globally for city chips
-    window.hestiaDebouncedSave = debouncedSave;
+    window.hermesDebouncedSave = debouncedSave;
 
     form.querySelectorAll('input[type="checkbox"]').forEach(function(input) {
         if (input.id === 'browser-notif-checkbox') return;
@@ -1054,19 +1054,19 @@ var _browserNotifEnabled = false;
 function sendBrowserNotification(newCount) {
     if (!_browserNotifEnabled) return;
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-    var lang = typeof hestiaGetLang === 'function' ? hestiaGetLang() : 'en';
-    var dict = HESTIA_I18N[lang] || HESTIA_I18N['en'] || {};
+    var lang = typeof hermesGetLang === 'function' ? hermesGetLang() : 'en';
+    var dict = HERMES_I18N[lang] || HERMES_I18N['en'] || {};
     var body;
     if (newCount === 1) {
         body = dict['browser_notif_new_one'] || '1 new home has been found';
     } else {
         body = (dict['browser_notif_new_many'] || '{count} new homes have been found').replace('{count}', newCount);
     }
-    new Notification('Hestia', { body: body, icon: '/avatar' });
+    new Notification('Hermes', { body: body, icon: '/avatar' });
 }
 
 (function() {
-    var STORAGE_KEY = 'hestia-browser-notif';
+    var STORAGE_KEY = 'hermes-browser-notif';
     var checkbox = document.getElementById('browser-notif-checkbox');
     var toggle = document.getElementById('browser-notif-toggle');
     var deniedHint = document.getElementById('browser-notif-denied');
@@ -1170,7 +1170,7 @@ var _autoRefreshTimer = null;
         var isMobile = window.matchMedia && window.matchMedia('(max-width: 999px)').matches;
         var span = liveError.querySelector('[data-i18n]');
         if (span) span.setAttribute('data-i18n', isMobile ? 'homes_live_lost_tap' : 'homes_live_lost');
-        if (typeof hestiaApplyLang === 'function') hestiaApplyLang(hestiaGetLang());
+        if (typeof hermesApplyLang === 'function') hermesApplyLang(hermesGetLang());
     }
 
     function showDead() {
@@ -1350,7 +1350,7 @@ function initializeLinkCode() {
         if (data.code) {
             document.getElementById('telegram-link-command').textContent = '/link ' + data.code;
             var openBtn = document.getElementById('telegram-open-btn');
-            if (openBtn) openBtn.href = 'https://t.me/hestia_homes_bot?start=hestia-web-link-' + data.code;
+            if (openBtn) openBtn.href = 'https://t.me/YOUR_TELEGRAM_BOT?start=hermes-web-link-' + data.code;
 
             _telegramExpiresAt = Date.now() + (data.expires_in * 1000);
         }

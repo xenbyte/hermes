@@ -8,8 +8,8 @@ from collections import defaultdict
 import anthropic
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from hestia_utils.db import get_connection, _write, fetch_one
-import hestia_utils.meta as meta
+from hermes_utils.db import get_connection, _write, fetch_one
+import hermes_utils.meta as meta
 
 from enrichment.profile import get_profile_by_id, build_system_prompt
 from enrichment.queue import drain_pending, mark_done, mark_failed, update_page_text
@@ -140,7 +140,7 @@ def _store_verdict(queue_item: dict, verdict: dict, model: str) -> None:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO hestia.enrichment_results "
+                "INSERT INTO hermes.enrichment_results "
                 "(id, profile_id, url, score, compatible, confidence, rejection_reason, "
                 "listing_json, trade_offs, recommendation, income_check, expat_flags, model_used) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s) "
@@ -340,7 +340,7 @@ async def _auto_generate_letters(
         return
 
     row = fetch_one(
-        "SELECT letter_nl, letter_en FROM hestia.enrichment_results "
+        "SELECT letter_nl, letter_en FROM hermes.enrichment_results "
         "WHERE id = %s AND profile_id = %s",
         [result_id, profile_id],
     )
@@ -352,7 +352,7 @@ async def _auto_generate_letters(
             letter = generate_letter(profile, verdict, lang)
             if letter:
                 _write(
-                    f"UPDATE hestia.enrichment_results SET {col} = %s "
+                    f"UPDATE hermes.enrichment_results SET {col} = %s "
                     "WHERE id = %s AND profile_id = %s",
                     [letter, result_id, profile_id],
                 )

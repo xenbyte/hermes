@@ -16,10 +16,10 @@ AGENCY="$2"
 
 case "$ENVIRONMENT" in
   dev)
-    DB_CONTAINER="hestia-database-dev"
+    DB_CONTAINER="hermes-database-dev"
     ;;
   prod)
-    DB_CONTAINER="hestia-database"
+    DB_CONTAINER="hermes-database"
     ;;
   *)
     echo "Invalid environment: '$ENVIRONMENT'. Use 'dev' or 'prod'."
@@ -27,5 +27,5 @@ case "$ENVIRONMENT" in
     ;;
 esac
 
-docker exec "$DB_CONTAINER" psql -U postgres -d hestia -c \
-  "UPDATE hestia.subscribers SET filter_agencies = (filter_agencies::jsonb || '[\"$AGENCY\"]'::jsonb)::json;"
+docker exec "$DB_CONTAINER" psql -U postgres -d hermes -c \
+  "UPDATE hermes.subscribers SET filter_agencies = (filter_agencies::jsonb || '[\"$AGENCY\"]'::jsonb)::json;"

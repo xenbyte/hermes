@@ -1,4 +1,4 @@
-"""End-to-end tests for the Hestia web interface.
+"""End-to-end tests for the Hermes web interface.
 
 All external dependencies (PostgreSQL, Brevo) are mocked so tests
 can run without any infrastructure.
@@ -18,16 +18,16 @@ os.environ.setdefault("BREVO_API_KEY", "xkeysib-test-key")
 os.environ.setdefault("FROM_EMAIL", "test@example.com")
 os.environ.setdefault("BASE_URL", "http://localhost:5000")
 
-import hestia_web.app as hestia_app
+import hermes_web.app as hermes_app
 
 
 @pytest.fixture
 def client():
     """Create a Flask test client."""
-    hestia_app.app.config["TESTING"] = True
+    hermes_app.app.config["TESTING"] = True
     # Reset rate limiter before each test
-    hestia_app.limiter.reset()
-    with hestia_app.app.test_client() as c:
+    hermes_app.limiter.reset()
+    with hermes_app.app.test_client() as c:
         yield c
 
 
@@ -35,13 +35,13 @@ def client():
 
 def make_session_cookie(email="user@example.com"):
     """Generate a signed session cookie value for the given email."""
-    return hestia_app.serializer.dumps(email, salt="email-session")
+    return hermes_app.serializer.dumps(email, salt="email-session")
 
 
 def set_session(client, email="user@example.com"):
     """Set a valid session cookie on the test client."""
     cookie_value = make_session_cookie(email)
-    client.set_cookie("hestia_session", cookie_value, domain="localhost")
+    client.set_cookie("hermes_session", cookie_value, domain="localhost")
 
 
 def get_csrf_token(html_content):
@@ -56,9 +56,9 @@ def get_csrf_token(html_content):
 def get_csrf_token_for_session(client):
     """Generate a CSRF token for the current session."""
     # Generate CSRF token directly using the session cookie
-    cookie_value = client.get_cookie("hestia_session", domain="localhost")
+    cookie_value = client.get_cookie("hermes_session", domain="localhost")
     if cookie_value:
-        return hestia_app.serializer.dumps(cookie_value.value, salt="csrf-token")
+        return hermes_app.serializer.dumps(cookie_value.value, salt="csrf-token")
     return None
 
 
@@ -144,7 +144,7 @@ class TestLandingPage:
         html = resp.data.decode()
         assert '<form method="post" action="/login">' in html
         assert 'type="email"' in html
-        assert "Hestia" in html
+        assert "Hermes" in html
 
     def test_get_index_shows_message_param(self, client):
         resp = client.get("/?message=Hello+World")
@@ -173,7 +173,7 @@ class TestLogin:
         assert resp.status_code == 302
         assert "message=" in resp.headers["Location"]
 
-    @patch("hestia_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app.sib_api_v3_sdk")
     def test_login_invalid_email_redirects(self, mock_sdk, client):
         index_resp = client.get("/")
         csrf_token = get_csrf_token(index_resp.data.decode())
@@ -185,8 +185,8 @@ class TestLogin:
         assert "message=" in resp.headers["Location"]
         mock_sdk.TransactionalEmailsApi.return_value.send_transac_email.assert_not_called()
 
-    @patch("hestia_web.app.get_db")
-    @patch("hestia_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app.get_db")
+    @patch("hermes_web.app.sib_api_v3_sdk")
     def test_login_valid_email_sends_email(self, mock_sdk, mock_get_db, client):
         # Mock database for storing magic token
         cur = make_mock_cursor()
@@ -207,8 +207,8 @@ class TestLogin:
         call_args = mock_sdk.SendSmtpEmail.call_args
         assert call_args[1]["to"] == [{"email": "user@example.com"}]
 
-    @patch("hestia_web.app.get_db")
-    @patch("hestia_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app.get_db")
+    @patch("hermes_web.app.sib_api_v3_sdk")
     def test_login_brevo_failure_shows_error(self, mock_sdk, mock_get_db, client):
         mock_sdk.TransactionalEmailsApi.return_value.send_transac_email.side_effect = \
             BrevoApiException(status=500, reason="Brevo error")
@@ -224,8 +224,8 @@ class TestLogin:
         assert resp.status_code == 302
         assert "Failed" in resp.headers["Location"] or "message=" in resp.headers["Location"]
 
-    @patch("hestia_web.app.get_db")
-    @patch("hestia_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app.get_db")
+    @patch("hermes_web.app.sib_api_v3_sdk")
     def test_login_normalizes_email(self, mock_sdk, mock_get_db, client):
         # Mock database for storing magic token
         cur = make_mock_cursor()
@@ -241,8 +241,8 @@ class TestLogin:
         # The token should contain the lowercased email
         assert call_args[1]["to"] == [{"email": "user@example.com"}]
 
-    @patch("hestia_web.app.get_db")
-    @patch("hestia_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app.get_db")
+    @patch("hermes_web.app.sib_api_v3_sdk")
     def test_login_rate_limit_per_email(self, mock_sdk, mock_get_db, client):
         """Test that login is rate limited to 5 requests per email per hour."""
         # Mock database for storing magic token
@@ -271,8 +271,8 @@ class TestLogin:
         )
         assert resp.status_code == 429
 
-    @patch("hestia_web.app.get_db")
-    @patch("hestia_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app.get_db")
+    @patch("hermes_web.app.sib_api_v3_sdk")
     def test_login_rate_limit_per_ip(self, mock_sdk, mock_get_db, client):
         """Test that login is rate limited to 20 requests per IP per hour."""
         # Mock database for storing magic token
@@ -320,9 +320,9 @@ class TestAuth:
         assert resp.status_code == 302
         assert "Invalid" in resp.headers["Location"] or "expired" in resp.headers["Location"]
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_valid_token_sets_session_and_redirects_to_dashboard(self, mock_get_db, client):
-        token_id, signed_token = hestia_app.generate_magic_token("user@example.com")
+        token_id, signed_token = hermes_app.generate_magic_token("user@example.com")
 
         cur = make_mock_cursor()
         # fetchone: magic_tokens lookup (token exists)
@@ -336,7 +336,7 @@ class TestAuth:
 
         # Should have a session cookie set in the response
         cookie_header = resp.headers.get("Set-Cookie", "")
-        assert "hestia_session" in cookie_header
+        assert "hermes_session" in cookie_header
 
 
 # =====================================================================
@@ -350,7 +350,7 @@ class TestSession:
         assert "/" == resp.headers["Location"] or "login" in resp.headers["Location"].lower() or resp.headers["Location"].endswith("/")
 
     def test_dashboard_with_invalid_cookie_redirects(self, client):
-        client.set_cookie("hestia_session", "garbage-value", domain="localhost")
+        client.set_cookie("hermes_session", "garbage-value", domain="localhost")
         resp = client.get("/dashboard", follow_redirects=False)
         assert resp.status_code == 302
 
@@ -362,7 +362,7 @@ class TestSession:
         with test_app.test_request_context():
             from flask import make_response as mr, redirect as rd
             resp = mr(rd("/"))
-            hestia_app.set_session_cookie(resp, "user@example.com")
+            hermes_app.set_session_cookie(resp, "user@example.com")
             # Check the Set-Cookie header
             cookie_header = resp.headers.get("Set-Cookie", "")
             assert "HttpOnly" in cookie_header
@@ -376,13 +376,13 @@ class TestSession:
 
         with test_app.test_request_context(base_url="http://example.com"):
             resp = mr(rd("/"))
-            hestia_app.set_session_cookie(resp, "user@example.com")
+            hermes_app.set_session_cookie(resp, "user@example.com")
             cookie_header = resp.headers.get("Set-Cookie", "")
             assert "Secure" not in cookie_header
 
         with test_app.test_request_context(base_url="https://example.com"):
             resp = mr(rd("/"))
-            hestia_app.set_session_cookie(resp, "user@example.com")
+            hermes_app.set_session_cookie(resp, "user@example.com")
             cookie_header = resp.headers.get("Set-Cookie", "")
             assert "Secure" in cookie_header
 
@@ -392,7 +392,7 @@ class TestSession:
 # =====================================================================
 
 class TestDashboard:
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_dashboard_unlinked_shows_link_telegram_button(self, mock_get_db, client):
         set_session(client)
         sub = mock_subscriber(telegram_id=None)
@@ -405,7 +405,7 @@ class TestDashboard:
         assert resp.status_code == 200
         assert "Link Telegram" in html
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_dashboard_unlinked_shows_filters(self, mock_get_db, client):
         """Filters should be accessible even without Telegram linked."""
         set_session(client)
@@ -422,7 +422,7 @@ class TestDashboard:
         assert "filter_agencies" in html
         assert "filter_cities" in html
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_dashboard_linked_shows_filters(self, mock_get_db, client):
         set_session(client)
         sub = mock_subscriber(telegram_id=12345)
@@ -439,7 +439,7 @@ class TestDashboard:
         # Toggle should be present, Link Telegram button should NOT
         assert "telegram-modal" not in html
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_dashboard_shows_email(self, mock_get_db, client):
         set_session(client, email="hello@world.com")
         sub = mock_subscriber(email_address="hello@world.com", telegram_id=12345)
@@ -462,7 +462,7 @@ class TestDashboard:
         cur.fetchall.side_effect = [MOCK_CITIES_ROWS, MOCK_AGENCIES_ROWS]
         conn = make_mock_conn(cur)
 
-        with patch("hestia_web.app.get_db", return_value=conn):
+        with patch("hermes_web.app.get_db", return_value=conn):
             resp = client.get("/dashboard")
         assert resp.status_code == 200
         html = resp.data.decode()
@@ -479,13 +479,13 @@ class TestDashboard:
         cur = make_dashboard_cursor(sub)
         conn = make_mock_conn(cur)
 
-        with patch("hestia_web.app.get_db", return_value=conn):
+        with patch("hermes_web.app.get_db", return_value=conn):
             resp = client.get("/dashboard")
         assert resp.status_code == 200
         html = resp.data.decode()
         assert 'data-is-new-user="false"' in html
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_link_telegram_page_auto_generates_code(self, mock_get_db, client):
         set_session(client)
         cur = make_mock_cursor()
@@ -497,14 +497,14 @@ class TestDashboard:
         resp = client.get("/link-telegram")
         html = resp.data.decode()
         assert "Your code:" in html
-        assert "t.me/hestia_homes_bot" in html
+        assert "t.me/YOUR_TELEGRAM_BOT" in html
         # Verify INSERT was called to create a link code
         insert_calls = [
             c for c in cur.execute.call_args_list if "INSERT" in str(c) and "link_codes" in str(c)
         ]
         assert len(insert_calls) == 1
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_dashboard_linked_shows_filter_values(self, mock_get_db, client):
         set_session(client)
         sub = mock_subscriber(
@@ -631,12 +631,12 @@ class _FakeIOSCursor:
         self._one = None
         self._all = []
 
-        if "select * from hestia.subscribers where device_id = %s" in q:
+        if "select * from hermes.subscribers where device_id = %s" in q:
             device_id = params[0]
             self._one = self.state.subscribers_by_device.get(device_id)
             return
 
-        if "insert into hestia.subscribers (device_id, apns_token)" in q and "on conflict (device_id) do nothing" in q:
+        if "insert into hermes.subscribers (device_id, apns_token)" in q and "on conflict (device_id) do nothing" in q:
             device_id, apns_token = params
             if device_id in self.state.subscribers_by_device:
                 self._one = None
@@ -657,7 +657,7 @@ class _FakeIOSCursor:
             self._one = {"id": row["id"]}
             return
 
-        if "update hestia.subscribers set apns_token = case when %s then apns_token else null end" in q and "where id = %s" in q:
+        if "update hermes.subscribers set apns_token = case when %s then apns_token else null end" in q and "where id = %s" in q:
             subscriber = self.state.find_subscriber_by_id(params[-1])
             if subscriber is None:
                 self.rowcount = 0
@@ -672,7 +672,7 @@ class _FakeIOSCursor:
             self.rowcount = 1
             return
 
-        if "update hestia.subscribers set apns_token = %s where id = %s" in q:
+        if "update hermes.subscribers set apns_token = %s where id = %s" in q:
             subscriber = self.state.find_subscriber_by_id(params[1])
             if subscriber is None:
                 self.rowcount = 0
@@ -681,7 +681,7 @@ class _FakeIOSCursor:
             self.rowcount = 1
             return
 
-        if "select distinct city from hestia.homes" in q:
+        if "select distinct city from hermes.homes" in q:
             seen = set()
             rows = []
             for home in self.state.homes:
@@ -692,15 +692,15 @@ class _FakeIOSCursor:
             self._all = rows
             return
 
-        if "select distinct on (agency) agency, user_info from hestia.targets where enabled = true" in q:
+        if "select distinct on (agency) agency, user_info from hermes.targets where enabled = true" in q:
             self._all = self.state.targets
             return
 
-        if "select count(*) as cnt from hestia.homes h where" in q:
+        if "select count(*) as cnt from hermes.homes h where" in q:
             self._one = {"cnt": len(self.state.homes)}
             return
 
-        if "select h.url, h.address, h.city, h.price, h.sqm," in q and "from hestia.homes h" in q:
+        if "select h.url, h.address, h.city, h.price, h.sqm," in q and "from hermes.homes h" in q:
             self._all = [dict(h) for h in self.state.homes]
             return
 
@@ -718,7 +718,7 @@ class TestApiHomes:
         resp = client.get("/api/homes")
         assert resp.status_code == 401
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_homes_allows_session_auth_without_device_header(self, mock_get_db, client):
         set_session(client, email="user@example.com")
 
@@ -745,7 +745,7 @@ class TestApiHomes:
         assert resp.status_code == 200
         assert resp.get_json()["total"] == 2
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_homes_returns_homes(self, mock_get_db, client):
         cur = MagicMock()
         cur.__enter__ = MagicMock(return_value=cur)
@@ -770,7 +770,7 @@ class TestApiHomes:
         assert data["per_page"] == 20
         assert len(data["homes"]) == 2
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_homes_min_sqm_includes_unknown_sqm(self, mock_get_db, client):
         """min sqm should not exclude homes with unknown sqm (-1)."""
         cur = MagicMock()
@@ -791,13 +791,13 @@ class TestApiHomes:
         assert resp.status_code == 200
 
         # Ensure the SQL condition includes "(h.sqm = -1 OR h.sqm >= %s)" with param 50.
-        exec_calls = [c for c in cur.execute.call_args_list if "FROM hestia.homes" in str(c)]
+        exec_calls = [c for c in cur.execute.call_args_list if "FROM hermes.homes" in str(c)]
         assert len(exec_calls) >= 2  # count + select
         count_sql, count_params = exec_calls[0][0][0], exec_calls[0][0][1]
         assert "h.sqm = -1 OR h.sqm >= %s" in count_sql
         assert 50 in count_params
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_homes_pagination(self, mock_get_db, client):
         cur = MagicMock()
         cur.__enter__ = MagicMock(return_value=cur)
@@ -816,7 +816,7 @@ class TestApiHomes:
         assert data["page"] == 2
         assert data["per_page"] == 10
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_homes_unknown_device_id(self, mock_get_db, client):
         cur = MagicMock()
         cur.__enter__ = MagicMock(return_value=cur)
@@ -830,7 +830,7 @@ class TestApiHomes:
         data = resp.get_json()
         assert data["error"] == "Unknown device_id"
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_homes_empty_filters(self, mock_get_db, client):
         """When user has no cities and no agencies, return empty."""
         cur = MagicMock()
@@ -874,10 +874,10 @@ class _FakeUrlopenResponse:
 
 
 class TestApiPreviewImageAuthParity:
-    @patch("hestia_web.app._preview_cache_set")
-    @patch("hestia_web.app._preview_cache_get", return_value=None)
-    @patch("hestia_web.app._safe_urlopen")
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app._preview_cache_set")
+    @patch("hermes_web.app._preview_cache_get", return_value=None)
+    @patch("hermes_web.app._safe_urlopen")
+    @patch("hermes_web.app.get_db")
     def test_preview_image_allows_device_auth(self, mock_get_db, mock_urlopen, _mock_cache_get, _mock_cache_set, client):
         cur = make_mock_cursor(
             fetchone_value={
@@ -898,10 +898,10 @@ class TestApiPreviewImageAuthParity:
         assert resp.is_json
         assert resp.get_json() == {"image_url": "https://example.com/photo.jpg"}
 
-    @patch("hestia_web.app._preview_cache_set")
-    @patch("hestia_web.app._preview_cache_get", return_value=None)
-    @patch("hestia_web.app._safe_urlopen")
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app._preview_cache_set")
+    @patch("hermes_web.app._preview_cache_get", return_value=None)
+    @patch("hermes_web.app._safe_urlopen")
+    @patch("hermes_web.app.get_db")
     def test_preview_image_raw_allows_device_auth(self, mock_get_db, mock_urlopen, _mock_cache_get, _mock_cache_set, client):
         cur = make_mock_cursor(
             fetchone_value={
@@ -958,7 +958,7 @@ class TestApiPreviewImageAuthParity:
 
 
 class TestApiStatisticsAndDonationAuth:
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_statistics_with_valid_cookie_returns_200_json(self, mock_get_db, client):
         set_session(client, email="user@example.com")
 
@@ -999,7 +999,7 @@ class TestApiStatisticsAndDonationAuth:
         assert "top_cities" in data
         assert "top_agencies" in data
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_statistics_with_valid_device_id_returns_200_json(self, mock_get_db, client):
         auth_cur = make_mock_cursor(
             fetchone_value={
@@ -1046,7 +1046,7 @@ class TestApiStatisticsAndDonationAuth:
         assert resp.get_json() == {"error": "unauthorized"}
         assert "Location" not in resp.headers
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_donation_link_with_valid_cookie_returns_200_json(self, mock_get_db, client):
         set_session(client, email="user@example.com")
 
@@ -1056,7 +1056,7 @@ class TestApiStatisticsAndDonationAuth:
                 "email_address": "user@example.com",
             }
         )
-        donation_cur = make_mock_cursor(fetchone_value={"donation_link": "https://buymeacoffee.com/hestia"})
+        donation_cur = make_mock_cursor(fetchone_value={"donation_link": "https://buymeacoffee.com/hermes"})
 
         conn = MagicMock()
         conn.__enter__ = MagicMock(return_value=conn)
@@ -1067,9 +1067,9 @@ class TestApiStatisticsAndDonationAuth:
         resp = client.get("/api/donation-link", follow_redirects=False)
         assert resp.status_code == 200
         assert resp.is_json
-        assert resp.get_json() == {"url": "https://buymeacoffee.com/hestia"}
+        assert resp.get_json() == {"url": "https://buymeacoffee.com/hermes"}
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_donation_link_with_valid_device_id_returns_200_json(self, mock_get_db, client):
         auth_cur = make_mock_cursor(
             fetchone_value={
@@ -1143,7 +1143,7 @@ def test_ios_routes_malformed_device_id_header(client, method, path):
         ("POST", "/api/device-token"),
     ],
 )
-@patch("hestia_web.app.get_db")
+@patch("hermes_web.app.get_db")
 def test_ios_routes_unknown_device_id(mock_get_db, client, method, path):
     cur = make_mock_cursor(fetchone_value=None)
     conn = make_mock_conn(cur)
@@ -1173,7 +1173,7 @@ class TestApiRegisterDevice:
         assert resp.status_code == 400
         assert resp.get_json()["error"] == "Malformed device_id"
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_register_device_creates_new(self, mock_get_db, client):
         cur = make_mock_cursor(fetchone_value={"id": 7})
         conn = make_mock_conn(cur)
@@ -1186,7 +1186,7 @@ class TestApiRegisterDevice:
         assert resp.status_code == 200
         assert resp.get_json() == {"status": "ok"}
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_register_device_returns_exists(self, mock_get_db, client):
         cur = make_mock_cursor(fetchone_value=None)
         conn = make_mock_conn(cur)
@@ -1196,21 +1196,21 @@ class TestApiRegisterDevice:
         assert resp.status_code == 200
         assert resp.get_json() == {"status": "exists"}
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_register_device_rate_limited(self, mock_get_db, client):
         cur = make_mock_cursor(fetchone_value={"id": 7})
         conn = make_mock_conn(cur)
         mock_get_db.return_value = conn
 
         for _ in range(10):
-            resp = client.post("/api/register-device", json={"device_id": str(hestia_app.uuid.uuid4())})
+            resp = client.post("/api/register-device", json={"device_id": str(hermes_app.uuid.uuid4())})
             assert resp.status_code == 200
-        limited = client.post("/api/register-device", json={"device_id": str(hestia_app.uuid.uuid4())})
+        limited = client.post("/api/register-device", json={"device_id": str(hermes_app.uuid.uuid4())})
         assert limited.status_code == 429
 
 
 class TestApiFiltersDevice:
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_filters_get_returns_exact_schema(self, mock_get_db, client):
         auth_cur = make_mock_cursor(
             fetchone_value={
@@ -1270,7 +1270,7 @@ class TestApiFiltersDevice:
         assert data["notifications_enabled"] is True
         assert "available_cities" in data
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_filters_post_saves_filters(self, mock_get_db, client):
         auth_cur = make_mock_cursor(
             fetchone_value={
@@ -1313,7 +1313,7 @@ class TestApiFiltersDevice:
         assert params[5].adapted == ["agency1", "agency2"]
         assert params[-1] == 5
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_filters_post_rejects_bad_payload(self, mock_get_db, client):
         auth_cur = make_mock_cursor(
             fetchone_value={
@@ -1364,7 +1364,7 @@ class TestApiFiltersDevice:
         assert resp.is_json
         assert "Location" not in resp.headers
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_filters_session_auth_takes_precedence_over_device_header(self, mock_get_db, client):
         set_session(client, email="user@example.com")
 
@@ -1403,7 +1403,7 @@ class TestApiFiltersDevice:
 
 
 class TestApiDeviceToken:
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_device_token_updates(self, mock_get_db, client):
         auth_cur = make_mock_cursor(
             fetchone_value={
@@ -1428,7 +1428,7 @@ class TestApiDeviceToken:
         params = write_cur.execute.call_args[0][1]
         assert params == ("abc123", 9)
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_device_token_missing_token(self, mock_get_db, client):
         auth_cur = make_mock_cursor(
             fetchone_value={
@@ -1450,10 +1450,10 @@ class TestApiDeviceToken:
 
 class TestIOSIntegrationMatrix:
     def test_ios_matrix_flow(self, client):
-        hestia_app.IOS_METRICS.clear()
+        hermes_app.IOS_METRICS.clear()
         fake_db = _FakeIOSDB()
 
-        with patch("hestia_web.app.get_db", new=fake_db):
+        with patch("hermes_web.app.get_db", new=fake_db):
             register_resp = client.post(
                 "/api/register-device",
                 json={"device_id": VALID_DEVICE_ID, "apns_token": "first-token"},
@@ -1510,16 +1510,16 @@ class TestIOSIntegrationMatrix:
             )
             assert unknown_resp.status_code == 401
 
-        assert hestia_app.IOS_METRICS["register-device:ok"] >= 1
-        assert hestia_app.IOS_METRICS["filter-save:ok"] >= 1
-        assert hestia_app.IOS_METRICS["device-token:ok"] >= 1
+        assert hermes_app.IOS_METRICS["register-device:ok"] >= 1
+        assert hermes_app.IOS_METRICS["filter-save:ok"] >= 1
+        assert hermes_app.IOS_METRICS["device-token:ok"] >= 1
 
 # =====================================================================
 # LINK TELEGRAM TESTS
 # =====================================================================
 
 class TestLinkTelegram:
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_link_telegram_redirects_to_dashboard_if_already_linked(self, mock_get_db, client):
         set_session(client)
 
@@ -1540,7 +1540,7 @@ class TestLinkTelegram:
         loc = resp.headers["Location"]
         assert loc.endswith("/") or "index" in loc
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_link_telegram_deletes_old_codes(self, mock_get_db, client):
         set_session(client)
         cur = make_mock_cursor()
@@ -1566,7 +1566,7 @@ class TestCheckTelegram:
         data = resp.get_json()
         assert data["linked"] is False
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_check_telegram_not_linked(self, mock_get_db, client):
         set_session(client)
         cur = make_mock_cursor()
@@ -1579,7 +1579,7 @@ class TestCheckTelegram:
         data = resp.get_json()
         assert data["linked"] is False
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_check_telegram_linked(self, mock_get_db, client):
         set_session(client)
         cur = make_mock_cursor()
@@ -1602,13 +1602,13 @@ class TestApiLinkCode:
         resp = client.post("/api/link-code")
         assert resp.status_code == 302
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_link_code_requires_csrf(self, mock_get_db, client):
         set_session(client)
         resp = client.post("/api/link-code", data={})
         assert resp.status_code == 403
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_link_code_returns_code(self, mock_get_db, client):
         set_session(client)
         csrf_token = get_csrf_token_for_session(client)
@@ -1624,7 +1624,7 @@ class TestApiLinkCode:
         assert data["code"].isalpha() and data["code"].isupper()
         assert data["expires_in"] == 300
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_api_link_code_stores_in_db(self, mock_get_db, client):
         set_session(client)
         csrf_token = get_csrf_token_for_session(client)
@@ -1647,7 +1647,7 @@ class TestApiLinkCode:
 class TestGenerateLinkCode:
     def test_generate_link_code_returns_code(self):
         """generate_link_code should return a 4-character uppercase code."""
-        from hestia_web.app import generate_link_code
+        from hermes_web.app import generate_link_code
 
         code = generate_link_code()
         assert len(code) == 4
@@ -1656,7 +1656,7 @@ class TestGenerateLinkCode:
 
     def test_insert_link_code_with_retry_succeeds_on_first_try(self):
         """insert_link_code_with_retry should insert successfully on first attempt."""
-        from hestia_web.app import insert_link_code_with_retry
+        from hermes_web.app import insert_link_code_with_retry
 
         cur = MagicMock()
         cur.rowcount = 1  # Simulate successful insert
@@ -1668,12 +1668,12 @@ class TestGenerateLinkCode:
 
         # Verify INSERT was called once
         cur.execute.assert_called_once()
-        assert "INSERT INTO hestia.link_codes" in cur.execute.call_args[0][0]
+        assert "INSERT INTO hermes.link_codes" in cur.execute.call_args[0][0]
         assert "ON CONFLICT" in cur.execute.call_args[0][0]
 
     def test_insert_link_code_with_retry_retries_on_collision(self):
         """insert_link_code_with_retry should retry if a collision occurs."""
-        from hestia_web.app import insert_link_code_with_retry
+        from hermes_web.app import insert_link_code_with_retry
 
         cur = MagicMock()
         # First attempt: collision (rowcount=0), second succeeds (rowcount=1)
@@ -1701,7 +1701,7 @@ class TestGenerateLinkCode:
 
     def test_insert_link_code_with_retry_raises_after_max_attempts(self):
         """insert_link_code_with_retry should raise RuntimeError after exhausting retries."""
-        from hestia_web.app import insert_link_code_with_retry
+        from hermes_web.app import insert_link_code_with_retry
 
         cur = MagicMock()
         # Always return collision (rowcount=0)
@@ -1715,7 +1715,7 @@ class TestGenerateLinkCode:
 
     def test_insert_link_code_with_retry_reraises_other_db_errors(self):
         """insert_link_code_with_retry should re-raise non-IntegrityError database errors."""
-        from hestia_web.app import insert_link_code_with_retry
+        from hermes_web.app import insert_link_code_with_retry
         import psycopg2
 
         cur = MagicMock()
@@ -1731,7 +1731,7 @@ class TestGenerateLinkCode:
 # =====================================================================
 
 class TestMergeLogic:
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_merge_when_both_rows_exist(self, mock_get_db, client):
         """When email-only and telegram rows both exist, they should be merged."""
         set_session(client)
@@ -1762,7 +1762,7 @@ class TestMergeLogic:
         delete_args = delete_calls[0][0][1]
         assert delete_args[0] == 2  # telegram row id
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_no_merge_when_only_email_row(self, mock_get_db, client):
         """When only an email-only row exists, linked should be False."""
         set_session(client)
@@ -1776,7 +1776,7 @@ class TestMergeLogic:
         data = resp.get_json()
         assert data["linked"] is False
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_no_merge_when_already_linked(self, mock_get_db, client):
         """When only a single linked row exists, linked should be True, no merge."""
         set_session(client)
@@ -1805,14 +1805,14 @@ class TestFilterUpdate:
         resp = client.post("/dashboard/filters", follow_redirects=False)
         assert resp.status_code == 302
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_update_filters_saves_data(self, mock_get_db, client):
         set_session(client)
         csrf_token = get_csrf_token_for_session(client)
         cur = make_mock_cursor()
         # fetchone: subscriber's current filter_agencies
         cur.fetchone.return_value = {"filter_agencies": ["agency1"]}
-        # fetchall: enabled agencies from hestia.targets
+        # fetchall: enabled agencies from hermes.targets
         cur.fetchall.return_value = [{"agency": "agency1"}, {"agency": "agency2"}]
         conn = make_mock_conn(cur)
         mock_get_db.return_value = conn
@@ -1847,9 +1847,9 @@ class TestFilterUpdate:
         assert args[5].adapted == ["agency1"]  # filter_agencies (Json wrapper)
         assert args[6] == "user@example.com"  # email
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_update_filters_preserves_hidden_agencies(self, mock_get_db, client):
-        """Agencies disabled in hestia.targets should be preserved on save."""
+        """Agencies disabled in hermes.targets should be preserved on save."""
         set_session(client)
         csrf_token = get_csrf_token_for_session(client)
         cur = make_mock_cursor()
@@ -1879,7 +1879,7 @@ class TestFilterUpdate:
         assert "agency1" in args[5].adapted
         assert "disabled_agency" in args[5].adapted
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_update_filters_empty_values(self, mock_get_db, client):
         set_session(client)
         csrf_token = get_csrf_token_for_session(client)
@@ -1909,7 +1909,7 @@ class TestFilterUpdate:
         assert args[4].adapted == []  # filter_cities empty (Json wrapper)
         assert args[5].adapted == []  # filter_agencies empty (Json wrapper)
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_update_filters_non_numeric_price_defaults_to_none(self, mock_get_db, client):
         """Non-numeric price values should default to None instead of causing a 500."""
         set_session(client)
@@ -1936,7 +1936,7 @@ class TestFilterUpdate:
         assert args[1] is None  # min_price invalid → None
         assert args[2] is None  # max_price invalid → None
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_update_filters_price_clamped_to_range(self, mock_get_db, client):
         """Prices outside 0–99999 should be clamped."""
         set_session(client)
@@ -1979,7 +1979,7 @@ class TestLogout:
 
         # Cookie should be cleared (set to empty or expired)
         cookie_header = resp.headers.get("Set-Cookie", "")
-        assert "hestia_session" in cookie_header
+        assert "hermes_session" in cookie_header
 
 
 # =====================================================================
@@ -1988,26 +1988,26 @@ class TestLogout:
 
 class TestTokens:
     def test_magic_token_roundtrip(self):
-        token_id, signed_token = hestia_app.generate_magic_token("test@example.com")
-        result = hestia_app.verify_magic_token(signed_token)
+        token_id, signed_token = hermes_app.generate_magic_token("test@example.com")
+        result = hermes_app.verify_magic_token(signed_token)
         assert result is not None
         email, returned_token_id = result
         assert email == "test@example.com"
         assert returned_token_id == token_id
 
     def test_magic_token_bad_signature(self):
-        result = hestia_app.verify_magic_token("not-a-valid-token")
+        result = hermes_app.verify_magic_token("not-a-valid-token")
         assert result is None
 
     def test_session_cookie_roundtrip(self):
-        value = hestia_app.serializer.dumps("user@example.com", salt="email-session")
-        result = hestia_app.serializer.loads(value, salt="email-session", max_age=3600)
+        value = hermes_app.serializer.dumps("user@example.com", salt="email-session")
+        result = hermes_app.serializer.loads(value, salt="email-session", max_age=3600)
         assert result == "user@example.com"
 
     def test_different_salts_dont_mix(self):
-        token = hestia_app.serializer.dumps("data", salt="magic-link")
+        token = hermes_app.serializer.dumps("data", salt="magic-link")
         with pytest.raises(Exception):
-            hestia_app.serializer.loads(token, salt="session", max_age=3600)
+            hermes_app.serializer.loads(token, salt="session", max_age=3600)
 
 
 # =====================================================================
@@ -2025,7 +2025,7 @@ class TestTemplates:
         resp = client.get("/")
         html = resp.data.decode()
         assert "<title>" in html
-        assert "Hestia" in html
+        assert "Hermes" in html
 
     def test_css_styles_present(self, client):
         resp = client.get("/")
@@ -2040,7 +2040,7 @@ class TestTemplates:
 class TestAppConfig:
     def test_debug_mode_is_off_by_default(self):
         """Ensure debug mode is not enabled by default (production safety)."""
-        assert hestia_app.app.debug is False
+        assert hermes_app.app.debug is False
 
 
 # =====================================================================
@@ -2060,7 +2060,7 @@ class TestCSRFProtection:
         # Generate CSRF token directly without session
         cookie_value = None
         if cookie_value:
-            token = hestia_app.serializer.dumps(cookie_value, salt="csrf-token")
+            token = hermes_app.serializer.dumps(cookie_value, salt="csrf-token")
         else:
             token = ""
         assert token == ""
@@ -2108,8 +2108,8 @@ class TestCSRFProtection:
         assert resp.status_code == 302
         assert "/" in resp.headers["Location"]
 
-    @patch("hestia_web.app.get_db")
-    @patch("hestia_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app.get_db")
+    @patch("hermes_web.app.sib_api_v3_sdk")
     def test_login_without_csrf_token_fails(self, mock_sdk, mock_get_db, client):
         """POST to /login without CSRF token should be rejected."""
         resp = client.post(
@@ -2121,8 +2121,8 @@ class TestCSRFProtection:
         # URL encoding: "Invalid security token" becomes "Invalid+security+token"
         assert "Invalid+security+token" in resp.headers["Location"]
 
-    @patch("hestia_web.app.get_db")
-    @patch("hestia_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app.get_db")
+    @patch("hermes_web.app.sib_api_v3_sdk")
     def test_login_with_invalid_csrf_token_fails(self, mock_sdk, mock_get_db, client):
         """POST to /login with invalid CSRF token should be rejected."""
         resp = client.post(
@@ -2134,8 +2134,8 @@ class TestCSRFProtection:
         # URL encoding: "Invalid security token" becomes "Invalid+security+token"
         assert "Invalid+security+token" in resp.headers["Location"]
 
-    @patch("hestia_web.app.get_db")
-    @patch("hestia_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app.get_db")
+    @patch("hermes_web.app.sib_api_v3_sdk")
     def test_login_with_valid_csrf_token_succeeds(self, mock_sdk, mock_get_db, client):
         """POST to /login with valid CSRF token should succeed."""
         # Mock database for storing magic token
@@ -2159,7 +2159,7 @@ class TestCSRFProtection:
         # Should not contain error message about security token
         assert "Invalid+security+token" not in resp.headers.get("Location", "")
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_update_filters_without_csrf_token_fails(self, mock_get_db, client):
         """POST to /dashboard/filters without CSRF token should be rejected."""
         set_session(client, email="user@example.com")
@@ -2173,7 +2173,7 @@ class TestCSRFProtection:
         assert resp.status_code == 302
         assert "/dashboard" in resp.headers["Location"]
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_update_filters_with_invalid_csrf_token_fails(self, mock_get_db, client):
         """POST to /dashboard/filters with invalid CSRF token should be rejected."""
         set_session(client, email="user@example.com")
@@ -2187,7 +2187,7 @@ class TestCSRFProtection:
         assert resp.status_code == 302
         assert "/dashboard" in resp.headers["Location"]
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_update_filters_with_valid_csrf_token_succeeds(self, mock_get_db, client):
         """POST to /dashboard/filters with valid CSRF token should succeed."""
         set_session(client, email="user@example.com")
@@ -2233,7 +2233,7 @@ class TestCSRFProtection:
         assert 'name="csrf_token"' in html
         assert 'type="hidden"' in html
 
-    @patch("hestia_web.app.get_db")
+    @patch("hermes_web.app.get_db")
     def test_csrf_token_appears_in_dashboard_form(self, mock_get_db, client):
         """Dashboard filter form should contain a hidden CSRF token field."""
         set_session(client, email="user@example.com")
@@ -2256,18 +2256,18 @@ class TestConnectionPool:
     def test_connection_pool_starts_none(self):
         """Connection pool should be None before first use (lazy initialization)."""
         # Reset the pool to test lazy init
-        original_pool = hestia_app.db_pool
-        hestia_app.db_pool = None
-        assert hestia_app.db_pool is None
+        original_pool = hermes_app.db_pool
+        hermes_app.db_pool = None
+        assert hermes_app.db_pool is None
         # Restore original pool
-        hestia_app.db_pool = original_pool
+        hermes_app.db_pool = original_pool
 
     def test_get_db_returns_context_manager(self):
         """get_db() should return a PooledConnection context manager."""
-        db_context = hestia_app.get_db()
-        assert isinstance(db_context, hestia_app.PooledConnection)
+        db_context = hermes_app.get_db()
+        assert isinstance(db_context, hermes_app.PooledConnection)
 
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app._get_pool")
     def test_pooled_connection_gets_and_returns_connection(self, mock_get_pool):
         """PooledConnection should get connection on enter and return on exit."""
         mock_pool = MagicMock()
@@ -2275,7 +2275,7 @@ class TestConnectionPool:
         mock_pool.getconn.return_value = mock_conn
         mock_get_pool.return_value = mock_pool
 
-        with hestia_app.get_db() as conn:
+        with hermes_app.get_db() as conn:
             assert conn is mock_conn
             mock_pool.getconn.assert_called_once()
             # putconn should not be called yet
@@ -2284,7 +2284,7 @@ class TestConnectionPool:
         # After exiting context, connection should be returned to pool
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app._get_pool")
     def test_pooled_connection_default_autocommit_is_false(self, mock_get_pool):
         """PooledConnection should set autocommit=False by default for transactions."""
         mock_pool = MagicMock()
@@ -2292,10 +2292,10 @@ class TestConnectionPool:
         mock_pool.getconn.return_value = mock_conn
         mock_get_pool.return_value = mock_pool
 
-        with hestia_app.get_db() as conn:
+        with hermes_app.get_db() as conn:
             assert conn.autocommit is False
 
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app._get_pool")
     def test_pooled_connection_explicit_autocommit(self, mock_get_pool):
         """PooledConnection should allow explicit autocommit=True."""
         mock_pool = MagicMock()
@@ -2303,10 +2303,10 @@ class TestConnectionPool:
         mock_pool.getconn.return_value = mock_conn
         mock_get_pool.return_value = mock_pool
 
-        with hestia_app.get_db(autocommit=True) as conn:
+        with hermes_app.get_db(autocommit=True) as conn:
             assert conn.autocommit is True
 
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app._get_pool")
     def test_pooled_connection_commits_on_success(self, mock_get_pool):
         """PooledConnection should commit transaction on successful exit."""
         mock_pool = MagicMock()
@@ -2314,7 +2314,7 @@ class TestConnectionPool:
         mock_pool.getconn.return_value = mock_conn
         mock_get_pool.return_value = mock_pool
 
-        with hestia_app.get_db() as conn:
+        with hermes_app.get_db() as conn:
             pass  # Normal exit
 
         # Should commit and return connection to pool
@@ -2322,7 +2322,7 @@ class TestConnectionPool:
         mock_conn.rollback.assert_not_called()
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app._get_pool")
     def test_pooled_connection_rolls_back_on_exception(self, mock_get_pool):
         """PooledConnection should rollback transaction on exception."""
         mock_pool = MagicMock()
@@ -2331,7 +2331,7 @@ class TestConnectionPool:
         mock_get_pool.return_value = mock_pool
 
         try:
-            with hestia_app.get_db() as conn:
+            with hermes_app.get_db() as conn:
                 raise ValueError("Test exception")
         except ValueError:
             pass
@@ -2341,7 +2341,7 @@ class TestConnectionPool:
         mock_conn.commit.assert_not_called()
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app._get_pool")
     def test_pooled_connection_autocommit_no_commit_or_rollback(self, mock_get_pool):
         """PooledConnection with autocommit should not call commit/rollback."""
         mock_pool = MagicMock()
@@ -2349,7 +2349,7 @@ class TestConnectionPool:
         mock_pool.getconn.return_value = mock_conn
         mock_get_pool.return_value = mock_pool
 
-        with hestia_app.get_db(autocommit=True) as conn:
+        with hermes_app.get_db(autocommit=True) as conn:
             pass  # Normal exit
 
         # Should not commit or rollback in autocommit mode
@@ -2357,7 +2357,7 @@ class TestConnectionPool:
         mock_conn.rollback.assert_not_called()
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app._get_pool")
     def test_pooled_connection_commit_error_rolls_back(self, mock_get_pool):
         """PooledConnection should rollback if commit fails."""
         mock_pool = MagicMock()
@@ -2367,7 +2367,7 @@ class TestConnectionPool:
         mock_get_pool.return_value = mock_pool
 
         try:
-            with hestia_app.get_db() as conn:
+            with hermes_app.get_db() as conn:
                 pass  # Normal exit, but commit will fail
         except Exception:
             pass
@@ -2381,8 +2381,8 @@ class TestConnectionPool:
 class TestTransactionBehavior:
     """Tests for database transaction behavior."""
 
-    @patch("hestia_web.app.sib_api_v3_sdk")
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app.sib_api_v3_sdk")
+    @patch("hermes_web.app._get_pool")
     def test_login_magic_tokens_are_transactional(self, mock_get_pool, mock_sdk):
         """DELETE and INSERT for magic_tokens should happen in a transaction."""
         # Setup mocks
@@ -2408,7 +2408,7 @@ class TestTransactionBehavior:
         mock_get_pool.return_value = mock_pool
 
         # Make request
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
         resp = client.get("/")
         html = resp.data.decode("utf-8")
         csrf_token = get_csrf_token(html)
@@ -2416,8 +2416,8 @@ class TestTransactionBehavior:
         resp = client.post("/login", data={"email": "test@example.com", "csrf_token": csrf_token})
 
         # Verify transaction behavior
-        assert execute_calls[0][0].strip().startswith("DELETE FROM hestia.magic_tokens")
-        assert execute_calls[1][0].strip().startswith("INSERT INTO hestia.magic_tokens")
+        assert execute_calls[0][0].strip().startswith("DELETE FROM hermes.magic_tokens")
+        assert execute_calls[1][0].strip().startswith("INSERT INTO hermes.magic_tokens")
 
         # Verify connection was configured for transactions (not autocommit)
         assert mock_conn.autocommit is False
@@ -2428,7 +2428,7 @@ class TestTransactionBehavior:
         # Verify connection was returned to pool
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app._get_pool")
     def test_link_code_generation_is_transactional(self, mock_get_pool):
         """DELETE and INSERT for link_codes should happen in a transaction."""
         # Setup mocks
@@ -2455,15 +2455,15 @@ class TestTransactionBehavior:
         mock_get_pool.return_value = mock_pool
 
         # Make authenticated request
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
         set_session(client, email="test@example.com")
         csrf_token = get_csrf_token_for_session(client)
 
         resp = client.post("/api/link-code", data={"csrf_token": csrf_token})
 
         # Verify transaction behavior
-        assert execute_calls[0][0].strip().startswith("DELETE FROM hestia.link_codes")
-        assert execute_calls[1][0].strip().startswith("INSERT INTO hestia.link_codes")
+        assert execute_calls[0][0].strip().startswith("DELETE FROM hermes.link_codes")
+        assert execute_calls[1][0].strip().startswith("INSERT INTO hermes.link_codes")
         assert "ON CONFLICT" in execute_calls[1][0]
 
         # Verify connection was configured for transactions (not autocommit)
@@ -2475,7 +2475,7 @@ class TestTransactionBehavior:
         # Verify connection was returned to pool
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch("hestia_web.app._get_pool")
+    @patch("hermes_web.app._get_pool")
     def test_transaction_rollback_on_database_error(self, mock_get_pool):
         """Transactions should rollback on database errors."""
         # Setup mocks
@@ -2490,7 +2490,7 @@ class TestTransactionBehavior:
             nonlocal execute_count
             execute_count += 1
             if execute_count == 2:  # Fail on INSERT
-                raise hestia_app.psycopg2.Error("Insert failed")
+                raise hermes_app.psycopg2.Error("Insert failed")
 
         mock_cur.execute = failing_execute
         mock_cur.__enter__ = MagicMock(return_value=mock_cur)
@@ -2505,7 +2505,7 @@ class TestTransactionBehavior:
         mock_get_pool.return_value = mock_pool
 
         # Make authenticated request
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
         set_session(client, email="test@example.com")
         csrf_token = get_csrf_token_for_session(client)
 
@@ -2525,13 +2525,13 @@ class TestSecurityHeaders:
 
     def test_csp_header_present(self):
         """All responses should have Content-Security-Policy header."""
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
         resp = client.get("/")
         assert "Content-Security-Policy" in resp.headers
 
     def test_csp_restricts_scripts(self):
         """CSP should restrict scripts to self, unpkg.com, and nonce."""
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
         resp = client.get("/")
         csp = resp.headers.get("Content-Security-Policy", "")
         # Check for required sources
@@ -2544,21 +2544,21 @@ class TestSecurityHeaders:
 
     def test_csp_default_src_self(self):
         """CSP should set default-src to self."""
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
         resp = client.get("/")
         csp = resp.headers.get("Content-Security-Policy", "")
         assert "default-src 'self'" in csp
 
     def test_csp_frame_ancestors_none(self):
         """CSP should prevent framing."""
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
         resp = client.get("/")
         csp = resp.headers.get("Content-Security-Policy", "")
         assert "frame-ancestors 'none'" in csp
 
     def test_additional_security_headers(self):
         """Should include additional security headers."""
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
         resp = client.get("/")
         assert resp.headers.get("X-Content-Type-Options") == "nosniff"
         assert resp.headers.get("X-Frame-Options") == "DENY"
@@ -2567,7 +2567,7 @@ class TestSecurityHeaders:
 
     def test_templates_no_inline_scripts(self):
         """Templates should not contain inline <script> tags with code."""
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
 
         # Check index page
         resp = client.get("/")
@@ -2579,7 +2579,7 @@ class TestSecurityHeaders:
 
     def test_dashboard_no_inline_scripts(self):
         """Dashboard should not contain unsafe inline scripts (nonce-based allowed)."""
-        client = hestia_app.app.test_client()
+        client = hermes_app.app.test_client()
         set_session(client, email="test@example.com")
 
         resp = client.get("/dashboard")
@@ -2602,51 +2602,51 @@ class TestTemplateCaching:
     def test_email_template_is_cached(self):
         """get_email_template should cache the template content."""
         # Clear the cache first
-        hestia_app.get_email_template.cache_clear()
+        hermes_app.get_email_template.cache_clear()
 
         # First call should read from disk
-        template1 = hestia_app.get_email_template()
+        template1 = hermes_app.get_email_template()
         assert template1 is not None
         assert len(template1) > 0
 
         # Second call should return cached value (same object)
-        template2 = hestia_app.get_email_template()
+        template2 = hermes_app.get_email_template()
         assert template2 is template1  # Same object in memory
 
         # Verify cache_info shows hits
-        cache_info = hestia_app.get_email_template.cache_info()
+        cache_info = hermes_app.get_email_template.cache_info()
         assert cache_info.hits >= 1
         assert cache_info.misses == 1  # Only first call missed
 
     def test_email_template_cache_clear(self):
         """Cache clear should force a fresh read from disk."""
         # Clear and load
-        hestia_app.get_email_template.cache_clear()
-        template1 = hestia_app.get_email_template()
+        hermes_app.get_email_template.cache_clear()
+        template1 = hermes_app.get_email_template()
 
         # Clear again
-        hestia_app.get_email_template.cache_clear()
+        hermes_app.get_email_template.cache_clear()
 
         # Next call should be a cache miss
-        cache_info_before = hestia_app.get_email_template.cache_info()
+        cache_info_before = hermes_app.get_email_template.cache_info()
         assert cache_info_before.currsize == 0
 
-        template2 = hestia_app.get_email_template()
+        template2 = hermes_app.get_email_template()
         assert template2 == template1  # Same content
 
     def test_login_uses_cached_template(self, client):
         """Login route should use the cached email template."""
         # Clear the cache first
-        hestia_app.get_email_template.cache_clear()
+        hermes_app.get_email_template.cache_clear()
 
-        with patch("hestia_web.app.PooledConnection") as mock_pool:
+        with patch("hermes_web.app.PooledConnection") as mock_pool:
             mock_conn = MagicMock()
             mock_cursor = MagicMock()
             mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
             mock_pool.return_value.__enter__.return_value = mock_conn
 
             # Mock email sending
-            with patch("hestia_web.app.sib_api_v3_sdk") as mock_sdk:
+            with patch("hermes_web.app.sib_api_v3_sdk") as mock_sdk:
                 mock_response = MagicMock()
                 mock_response.message_id = "test-message-id"
                 mock_sdk.TransactionalEmailsApi.return_value.send_transac_email.return_value = mock_response
@@ -2659,7 +2659,7 @@ class TestTemplateCaching:
                 client.post("/login", data={"email": "test@example.com", "csrf_token": csrf_token})
 
                 # Get cache info after first request
-                cache_info = hestia_app.get_email_template.cache_info()
+                cache_info = hermes_app.get_email_template.cache_info()
                 initial_hits = cache_info.hits
 
                 # Get new CSRF token for second request
@@ -2669,5 +2669,5 @@ class TestTemplateCaching:
                 # Second login request should hit the cache
                 client.post("/login", data={"email": "test2@example.com", "csrf_token": csrf_token2})
 
-                cache_info_after = hestia_app.get_email_template.cache_info()
+                cache_info_after = hermes_app.get_email_template.cache_info()
                 assert cache_info_after.hits > initial_hits  # Cache hit on second request

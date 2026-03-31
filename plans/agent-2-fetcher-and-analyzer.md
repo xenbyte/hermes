@@ -6,32 +6,32 @@ Read `@plans/context.md` first for full project context.
 
 Agent 1 must be complete. Verify these files exist before starting:
 - `misc/sql/enrichment_schema.sql`
-- `hestia/enrichment/__init__.py`
-- `hestia/enrichment/profile.py`
-- `hestia/enrichment/queue.py`
-- `hestia/enrichment/costs.py`
+- `hermes/enrichment/__init__.py`
+- `hermes/enrichment/profile.py`
+- `hermes/enrichment/queue.py`
+- `hermes/enrichment/costs.py`
 
 Read all of them to understand the interfaces you depend on.
 
 ## Your Job
 
-1. `hestia/enrichment/fetcher.py` — detail page content extraction
-2. `hestia/enrichment/analyzer.py` — the scheduled batch analysis job
-3. Add `anthropic` to `hestia/requirements.txt`
+1. `hermes/enrichment/fetcher.py` — detail page content extraction
+2. `hermes/enrichment/analyzer.py` — the scheduled batch analysis job
+3. Add `anthropic` to `hermes/requirements.txt`
 
 ## Files to Read First
 
-- `hestia/enrichment/profile.py` — you call `get_profiles_with_enrichment()`, `get_profile_by_id()`, `build_system_prompt()`
-- `hestia/enrichment/queue.py` — you call `drain_pending()`, `mark_done()`, `mark_failed()`, `update_page_text()`
-- `hestia/enrichment/costs.py` — you call `log_usage()`, `check_daily_budget()`
-- `hestia/hestia_utils/db.py` — for DB write patterns when storing enrichment_results
-- `hestia/hestia_utils/meta.py` — for `BOT`, `escape_markdownv2()`, emoji constants
-- `hestia/hestia_utils/parser.py` — just the `Home` class (lines 11-84), to understand the data shape
-- `hestia/requirements.txt` — to add `anthropic`
+- `hermes/enrichment/profile.py` — you call `get_profiles_with_enrichment()`, `get_profile_by_id()`, `build_system_prompt()`
+- `hermes/enrichment/queue.py` — you call `drain_pending()`, `mark_done()`, `mark_failed()`, `update_page_text()`
+- `hermes/enrichment/costs.py` — you call `log_usage()`, `check_daily_budget()`
+- `hermes/hermes_utils/db.py` — for DB write patterns when storing enrichment_results
+- `hermes/hermes_utils/meta.py` — for `BOT`, `escape_markdownv2()`, emoji constants
+- `hermes/hermes_utils/parser.py` — just the `Home` class (lines 11-84), to understand the data shape
+- `hermes/requirements.txt` — to add `anthropic`
 
 ## Files to Create
 
-### 1. `hestia/enrichment/fetcher.py`
+### 1. `hermes/enrichment/fetcher.py`
 
 ```python
 import logging
@@ -85,7 +85,7 @@ Important:
 - Set a reasonable User-Agent header for HTTP requests.
 - The 300-char threshold is for the **extracted content**, not raw HTML.
 
-### 2. `hestia/enrichment/analyzer.py`
+### 2. `hermes/enrichment/analyzer.py`
 
 This is the scheduled batch job entry point — called by cron, not imported by other modules.
 
@@ -95,13 +95,13 @@ import logging
 import anthropic
 from datetime import datetime
 
-from hestia_utils.db import get_connection, _write, fetch_one
-import hestia_utils.meta as meta
+from hermes_utils.db import get_connection, _write, fetch_one
+import hermes_utils.meta as meta
 
-from hestia.enrichment.profile import get_profile_by_id, build_system_prompt
-from hestia.enrichment.queue import drain_pending, mark_done, mark_failed, update_page_text
-from hestia.enrichment.fetcher import fetch_detail_page
-from hestia.enrichment.costs import log_usage, check_daily_budget
+from hermes.enrichment.profile import get_profile_by_id, build_system_prompt
+from hermes.enrichment.queue import drain_pending, mark_done, mark_failed, update_page_text
+from hermes.enrichment.fetcher import fetch_detail_page
+from hermes.enrichment.costs import log_usage, check_daily_budget
 
 ANALYSIS_MODEL = "claude-haiku-4-5-20251001"
 LETTER_MODEL = "claude-sonnet-4-20250514"
@@ -120,7 +120,7 @@ def _parse_claude_response(response_text: str) -> list[dict]:
     Never raise — always return a list."""
 
 def _store_verdict(queue_item: dict, verdict: dict) -> None:
-    """INSERT into hestia.enrichment_results.
+    """INSERT into hermes.enrichment_results.
     Map verdict fields to table columns.
     listing_json = verdict['listing'] as JSONB.
     income_check = verdict['income_check'] as JSONB."""
@@ -138,7 +138,7 @@ async def _send_enriched_message(telegram_id: str, verdict: dict, url: str) -> N
 
 async def _auto_generate_letters(profile: dict, verdict: dict, result_id: str) -> None:
     """For score >= 8, call generate_letter() for both NL and EN.
-    Import from hestia.enrichment.letters.
+    Import from hermes.enrichment.letters.
     Only call if letter_nl/letter_en is still NULL in the DB."""
 
 def run_analysis() -> None:
@@ -173,7 +173,7 @@ Important details:
 - Group low-scored listings (< 5) into one summary message to avoid spam.
 - If a listing's page_text is None and screenshot_b64 is also None, mark as failed and skip.
 
-### 3. Update `hestia/requirements.txt`
+### 3. Update `hermes/requirements.txt`
 
 Add to the end:
 ```
