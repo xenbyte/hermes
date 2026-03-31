@@ -8,11 +8,7 @@ from psycopg2.extras import RealDictCursor, RealDictRow
 
 from hermes_utils.secrets import DB
 
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s]: %(message)s",
-    level=logging.WARNING,
-    filename="/data/hermes.log"
-)
+logger = logging.getLogger(__name__)
 
 LANG_CACHE = {}
 
@@ -34,7 +30,7 @@ def fetch_one(query: str, params: list[str] = []) -> dict:
             cur.execute(query, params)
             result = cur.fetchone()
     except Exception as e:
-        logging.error(f"Database read error: {repr(e)}\nQuery: {query}\nParams: {params}")
+        logger.error("Database read error: %r\nQuery: %s\nParams: %s", e, query, params)
         result = {}
     finally:
         if conn: conn.close()
@@ -49,7 +45,7 @@ def fetch_all(query: str, params: list[str] = []) -> list[RealDictRow]:
             cur.execute(query, params)
             result = cur.fetchall()
     except Exception as e:
-        logging.error(f"Database read error: {repr(e)}\nQuery: {query}\nParams: {params}")
+        logger.error("Database read error: %r\nQuery: %s\nParams: %s", e, query, params)
         result = []
     finally:
         if conn: conn.close()
@@ -95,11 +91,12 @@ def _write(query: str, params: list[str] = []) -> None:
             cur.execute(query, params)
             conn.commit()
     except Exception as e:
-        logging.error(f"Database write error: {repr(e)}\nQuery: {query}\nParams: {params}")
+        logger.error("Database write error: %r\nQuery: %s\nParams: %s", e, query, params)
     finally:
         if conn: conn.close()
 
 def add_home(url: str, address: str, city: str, price: int, agency: str, date_added: str, sqm: int = -1) -> None:
+    logger.debug("add_home: %s, %s (%s) €%s", address, city, agency, price)
     _write("INSERT INTO hermes.homes (url, address, city, price, agency, date_added, sqm) VALUES (%s, %s, %s, %s, %s, %s, %s)", [url, address, city, str(price), agency, date_added, str(sqm)])
 def add_user(telegram_id: int) -> None:
     # Use an explicit column list so this stays valid when new columns are added to subscribers.
@@ -348,7 +345,7 @@ def link_account(telegram_id: int, code: str) -> Literal["success", "invalid_cod
             return "success"
     except Exception as e:
         conn.rollback()
-        logging.error(f"Database error in link_account: {repr(e)}")
+        logger.error("Database error in link_account: %r", e)
         return "invalid_code"
     finally:
         if conn: conn.close()

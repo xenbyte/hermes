@@ -3,6 +3,9 @@ import telegram
 
 from hermes_utils.secrets import TOKEN
 
+logger = logging.getLogger(__name__)
+
+
 def escape_markdownv2(text: str) -> str:
     text = text.replace('.', r'\.')
     text = text.replace('!', r'\!')
@@ -13,12 +16,6 @@ def escape_markdownv2(text: str) -> str:
     text = text.replace('(', r'\(')
     text = text.replace(')', r'\)')
     return text
-
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s]: %(message)s",
-    level=logging.WARNING,
-    filename="/data/hermes.log"
-)
 
 BOT = telegram.Bot(TOKEN)
 

@@ -14,7 +14,10 @@ import hermes_utils.meta as meta
 import hermes_utils.secrets as secrets
 import hermes_utils.apns as apns
 from hermes_utils.parser import Home, HomeResults
+from hermes_utils.logging_config import setup_logging
 from enrichment.prefilter import enqueue_for_enrichment
+
+logger = logging.getLogger(__name__)
 
 APNS_MAX_RETRIES = 3
 APNS_RETRY_BASE_SECONDS = 0.5
@@ -26,7 +29,7 @@ def _increment_scraper_metric(metric_name: str, outcome: str) -> int:
     key = f"{metric_name}:{outcome}"
     SCRAPER_METRICS[key] += 1
     value = SCRAPER_METRICS[key]
-    logging.info("scraper_metric metric=%s outcome=%s value=%s", metric_name, outcome, value)
+    logger.debug("scraper_metric metric=%s outcome=%s value=%s", metric_name, outcome, value)
     return value
 
 
@@ -87,7 +90,7 @@ async def _record_target_error(target: dict, exc: BaseException) -> None:
         )
     except BaseException as db_error:
         fallback_error = f"Failed to persist error rollup for target {target.get('id')}: {repr(db_error)}"
-        logging.error(fallback_error)
+        logger.error(fallback_error)
         await meta.BOT.send_message(text=fallback_error, chat_id=secrets.OWN_CHAT_ID)
 
 
@@ -117,7 +120,7 @@ async def main() -> None:
     # Once a week, Friday 6pm UTC, send all who subscribed three weeks ago a thanks with a donation link reminder
     if datetime.now().weekday() == 4 and datetime.now().hour == 18 and datetime.now().minute < 4:
         if db.get_dev_mode():
-            logging.warning("Dev mode is enabled, not broadcasting thanks messages")
+            logger.warning("Dev mode is enabled, not broadcasting thanks messages")
         else:
             subs = db.fetch_all("""
                 SELECT * FROM hermes.subscribers 
@@ -126,7 +129,7 @@ async def main() -> None:
             """)
 
             donation_link = db.get_donation_link()
-            logging.warning(f"Broadcasting thanks message to {len(subs)} subscribers")
+            logger.info("Broadcasting thanks message to %d subscribers", len(subs))
             for sub in subs:
                 sleep(1/29)  # avoid rate limit (broadcasting to max 30 users per second)
                 message = rf"""Thanks for using Hermes, I\'ve put a lot of work into it and I hope it\'s helping you out\!
@@ -137,22 +140,24 @@ Good luck in your search\!"""
                 try:
                     await meta.BOT.send_message(text=message, chat_id=sub["telegram_id"], parse_mode="MarkdownV2", disable_web_page_preview=True)
                 except BaseException as e:
-                    logging.warning(f"Exception while broadcasting thanks message to {sub['telegram_id']}: {repr(e)}")
+                    logger.warning("Exception while broadcasting thanks message to telegram_id=%s: %r", sub['telegram_id'], e)
                     continue
     
     if not db.get_scraper_halted():
         scrape_start_ts = datetime.now()
-        for target in db.fetch_all("SELECT * FROM hermes.targets WHERE enabled = true"):
+        targets = db.fetch_all("SELECT * FROM hermes.targets WHERE enabled = true")
+        logger.info("Starting scrape run for %d targets", len(targets))
+        for target in targets:
             try:
                 await scrape_site(target)
             except BaseException as e:
                 error = f"[{target['agency']} ({target['id']})] {repr(e)}"
-                logging.error(error)
+                logger.error(error)
                 await _record_target_error(target, e)
         scrape_duration = datetime.now() - scrape_start_ts
-        logging.warning(f"Scrape took {scrape_duration.total_seconds()} seconds")
+        logger.info("Scrape completed in %.1f seconds", scrape_duration.total_seconds())
     else:
-        logging.warning("Scraper is halted")
+        logger.info("Scraper is halted, skipping run")
 
 
 async def broadcast(homes: list[Home]) -> None:
@@ -195,12 +200,10 @@ async def broadcast(homes: list[Home]) -> None:
                     except Forbidden as e:
                         # This means the user deleted their account or blocked the bot, so disable them
                         db.disable_user(sub["telegram_id"])
-                        logging.warning(
-                            f"Removed subscriber with Telegram id {str(sub['telegram_id'])} due to broadcast failure: {repr(e)}"
-                        )
+                        logger.info("Removed subscriber telegram_id=%s due to broadcast failure: %r", sub['telegram_id'], e)
                     except Exception as e:
                         # Log any other exceptions
-                        logging.warning(f"Failed to broadcast to {sub['telegram_id']}: {repr(e)}")
+                        logger.warning("Failed to broadcast to telegram_id=%s: %r", sub['telegram_id'], e)
 
                 apns_token = sub.get("apns_token")
                 if not apns_token or not apns_client.enabled:
@@ -212,10 +215,10 @@ async def broadcast(homes: list[Home]) -> None:
                     result = apns_client.send(apns_token, payload)
                     if result.ok:
                         _increment_scraper_metric("apns", "success")
-                        logging.info(
+                        logger.debug(
                             "APNs send success subscriber_id=%s device_id=%s",
-                            str(sub.get("id")),
-                            str(sub.get("device_id")),
+                            sub.get("id"),
+                            sub.get("device_id"),
                         )
                         break
                     if not result.should_retry or attempt == APNS_MAX_RETRIES:
@@ -226,13 +229,13 @@ async def broadcast(homes: list[Home]) -> None:
                 if result is None or result.ok:
                     continue
 
-                logging.warning(
+                logger.warning(
                     "APNs send failure subscriber_id=%s device_id=%s status=%s reason=%s retryable=%s",
-                    str(sub.get("id")),
-                    str(sub.get("device_id")),
-                    str(result.status_code),
+                    sub.get("id"),
+                    sub.get("device_id"),
+                    result.status_code,
                     result.reason,
-                    str(result.should_retry),
+                    result.should_retry,
                 )
                 _increment_scraper_metric("apns", "failure")
 
@@ -241,10 +244,10 @@ async def broadcast(homes: list[Home]) -> None:
                     apns_invalid_counts[sub_id] = apns_invalid_counts.get(sub_id, 0) + 1
                     if apns_invalid_counts[sub_id] >= APNS_INVALID_TOKEN_THRESHOLD:
                         db.clear_apns_token(sub_id)
-                        logging.warning(
-                            "Cleared APNs token for subscriber_id=%s after invalid token failures=%s",
-                            str(sub_id),
-                            str(apns_invalid_counts[sub_id]),
+                        logger.info(
+                            "Cleared APNs token for subscriber_id=%s after %s invalid token failures",
+                            sub_id,
+                            apns_invalid_counts[sub_id],
                         )
 
 
@@ -263,15 +266,15 @@ async def scrape_site(target: dict) -> None:
         prev_homes: list[Home] = []
         new_homes: list[Home] = []
         
-        # Check retrieved homes against previously scraped homes (of the last 6 months)
         for home in db.fetch_all("SELECT address, city FROM hermes.homes WHERE date_added > now() - interval '180 day'"):
             prev_homes.append(Home(home["address"], home["city"]))
         for home in HomeResults(target["agency"], r):
             if home not in prev_homes:
                 new_homes.append(home)
 
-        # Write new homes to database
+        logger.info("[%s] Found %d new homes (of %d total parsed)", target["agency"], len(new_homes), len(new_homes) + len(prev_homes))
         for home in new_homes:
+            logger.debug("[%s] New: %s, %s - €%d", target["agency"], home.address, home.city, home.price)
             db.add_home(home.url,
                         home.address,
                         home.city,
@@ -285,10 +288,11 @@ async def scrape_site(target: dict) -> None:
         try:
             enqueue_for_enrichment(new_homes)
         except Exception as e:
-            logging.error(f"Enrichment enqueue failed: {repr(e)}")
+            logger.error("Enrichment enqueue failed: %r", e)
     else:
         raise ConnectionError(f"Got a non-OK status code: {r.status_code}")
     
 
 if __name__ == '__main__':
+    setup_logging()
     run(main())

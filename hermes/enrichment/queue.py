@@ -86,7 +86,7 @@ def mark_failed(queue_id: str, profile_id: int, reason: str) -> None:
         "WHERE id = %s AND profile_id = %s",
         [queue_id, profile_id],
     )
-    logger.warning("Queue item %s (profile %s) failed: %s", queue_id, profile_id, reason)
+    logger.info("Queue item %s (profile %s) failed: %s", queue_id, profile_id, reason)
 
 
 def increment_retry(queue_id: str, profile_id: int) -> None:

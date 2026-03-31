@@ -10,16 +10,19 @@ import hermes_utils.db as db
 import hermes_utils.meta as meta
 import hermes_utils.secrets as secrets
 import hermes_utils.strings as strings
+from hermes_utils.logging_config import setup_logging
+
+logger = logging.getLogger(__name__)
 
 
 def initialize():
-    logging.warning("Initializing application...")
+    logger.info("Initializing application...")
 
     if db.get_scraper_halted():
-        logging.warning("Scraper is halted")
+        logger.warning("Scraper is halted")
         
     if db.get_dev_mode():
-        logging.warning("Dev mode is enabled")
+        logger.warning("Dev mode is enabled")
 
 
 def privileged(chat: telegram.Chat, msg: str, command: str, check_only: bool = True) -> bool:
@@ -28,11 +31,11 @@ def privileged(chat: telegram.Chat, msg: str, command: str, check_only: bool = T
     
     if chat and chat.id in admin_chat_ids:
         if not check_only:
-            logging.warning(f"Command {command} by ID {chat.id}: {msg}")
+            logger.info("Admin command /%s by chat_id=%s: %s", command, chat.id, msg)
         return True
     else:
         if not check_only:
-            logging.warning(f"Unauthorized {command} attempted by ID {chat.id}.")
+            logger.warning("Unauthorized /%s attempted by chat_id=%s", command, chat.id)
         return False
 
 
@@ -74,7 +77,7 @@ def requires_approval(func):
 async def new_sub(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, reenable: bool = False) -> None:
     if not update.effective_chat: return
     name = await get_sub_name(update, context)
-    logging.warning(f"New subscriber: {name} ({update.effective_chat.id})")
+    logger.info("New subscriber: %s (chat_id=%s)", name, update.effective_chat.id)
     
     if reenable:
         db.enable_user(update.effective_chat.id)
@@ -86,6 +89,7 @@ async def new_sub(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, r
 
 async def start(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat: return
+    logger.debug("/start from chat_id=%s", update.effective_chat.id)
     checksub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
     
     payload = context.args[0] if context.args else None
@@ -114,7 +118,7 @@ async def stop(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> N
             db.disable_user(update.effective_chat.id)
             
             name = await get_sub_name(update, context)
-            logging.warning(f"Removed subscriber: {name} ({update.effective_chat.id})")
+            logger.info("Removed subscriber: %s (chat_id=%s)", name, update.effective_chat.id)
 
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -160,9 +164,9 @@ async def announce(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) 
         except Forbidden as e:
             # This means the user deleted their account or blocked the bot, so disable them
             db.disable_user(sub["telegram_id"])
-            logging.warning(f"Removed subscriber with Telegram id {str(sub['telegram_id'])} due to announce failure: {repr(e)}")
+            logger.info("Removed subscriber telegram_id=%s due to announce failure: %r", sub['telegram_id'], e)
         except BaseException as e:
-            logging.warning(f"Exception while broadcasting announcement to {sub['telegram_id']}: {repr(e)}")
+            logger.warning("Exception while broadcasting announcement to telegram_id=%s: %r", sub['telegram_id'], e)
             continue
 
 
@@ -270,6 +274,7 @@ async def set_donation_link(update: telegram.Update, context: ContextTypes.DEFAU
 @requires_approval
 async def filter(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.message or not update.message.text: return
+    logger.debug("/filter from chat_id=%s: %s", update.effective_chat.id, update.message.text)
     try:
         cmd = [token.lower() for token in update.message.text.split(' ')]
     except AttributeError:
@@ -279,7 +284,7 @@ async def filter(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Fetch subscriber from database
     sub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
     if not sub:
-        logging.error(f"Subscriber {update.effective_chat.id} used /filter but is not in database. Msg: {update.message.text}")
+        logger.error("Subscriber chat_id=%s used /filter but is not in database. Msg: %s", update.effective_chat.id, update.message.text)
         await context.bot.send_message(update.effective_chat.id, "Couldn't fetch your filter settings; this is unexpected, please report it")
         return
     
@@ -498,7 +503,7 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
             letter = generate_letter(profile, dict(verdict), language)
             await query.message.reply_text(letter)
         except Exception as e:
-            logging.error(f"Letter generation callback failed: {repr(e)}")
+            logger.error("Letter generation callback failed: %r", e)
             await query.message.reply_text("Something went wrong generating the letter. Please try again.")
 
 
@@ -647,6 +652,7 @@ async def help(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 if __name__ == '__main__':
+    setup_logging()
     initialize()
     application = ApplicationBuilder().token(secrets.TOKEN).build()
     application.add_handler(CommandHandler("start", start))

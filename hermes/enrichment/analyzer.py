@@ -11,6 +11,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from hermes_utils.db import get_connection, _write, fetch_one
 import hermes_utils.meta as meta
 
+from hermes_utils.logging_config import setup_logging
 from enrichment.profile import get_profile_by_id, build_system_prompt
 from enrichment.queue import drain_pending, mark_done, mark_failed, update_page_text
 from enrichment.fetcher import fetch_detail_page
@@ -372,10 +373,10 @@ async def _run_analysis_async() -> None:
 
     items = drain_pending(limit=MAX_BATCH_SIZE)
     if not items:
-        logger.warning("No pending items in enrichment queue")
+        logger.info("No pending items in enrichment queue")
         return
 
-    logger.warning("Processing %d enrichment queue items", len(items))
+    logger.info("Processing %d enrichment queue items", len(items))
 
     groups: dict[int, list[dict]] = defaultdict(list)
     for item in items:
@@ -384,6 +385,7 @@ async def _run_analysis_async() -> None:
     client = anthropic.Anthropic()
 
     for profile_id, group_items in groups.items():
+        logger.debug("Processing profile_id=%s with %d items", profile_id, len(group_items))
         profile = get_profile_by_id(profile_id)
         if not profile:
             logger.error("Profile %s not found, failing %d items", profile_id, len(group_items))
@@ -473,6 +475,7 @@ async def _run_analysis_async() -> None:
 
         for i, item in enumerate(fetchable_items):
             verdict = verdict_map.get(i)
+            logger.debug("Verdict for item %s: score=%s compatible=%s", item["id"][:12], verdict.get("score") if verdict else None, verdict.get("compatible") if verdict else None)
             if not verdict:
                 mark_failed(
                     item["id"], item["profile_id"], "No verdict returned by Claude"
@@ -503,7 +506,7 @@ async def _run_analysis_async() -> None:
         if low_scored:
             await _send_low_score_summary(profile["telegram_id"], low_scored)
 
-    logger.warning("Analysis run complete")
+    logger.info("Analysis run complete")
 
 
 def run_analysis() -> None:
@@ -512,4 +515,5 @@ def run_analysis() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     run_analysis()

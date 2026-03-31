@@ -23,13 +23,11 @@ mock_secrets.PRIVILEGED_USERS = [12345]
 mock_secrets.WORKDIR = "/tmp/"
 sys.modules['hermes_utils.secrets'] = mock_secrets
 
-# Patch logging.basicConfig to avoid writing to /data/hermes.log
+# Prevent logging_config from writing to /data/hermes.log during tests
 import logging
-_original_basicConfig = logging.basicConfig
-def _patched_basicConfig(**kwargs):
-    kwargs.pop('filename', None)
-    _original_basicConfig(**kwargs)
-logging.basicConfig = _patched_basicConfig
+import hermes_utils.logging_config as _logging_config
+_logging_config._initialized = True
+logging.basicConfig(level=logging.DEBUG)
 
 # Mock telegram.Bot to avoid network calls during import of meta.py
 import telegram

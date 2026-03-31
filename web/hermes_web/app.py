@@ -71,16 +71,17 @@ serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 # Logging
 # ---------------------------------------------------------------------------
 
-# Configure logging with INFO level and JSON format support
 log_format = os.getenv("LOG_FORMAT", "plain")  # "json" for production, "plain" for dev
+log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, log_level_name, logging.INFO)
 logger = logging.getLogger("hermes")
-logger.setLevel(logging.INFO)
+logger.setLevel(log_level)
 
 # Remove any existing handlers to avoid duplicates
 logger.handlers.clear()
 
 handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.INFO)
+handler.setLevel(log_level)
 
 if log_format == "json":
     # Structured JSON logging for production

@@ -31,8 +31,8 @@ def log_usage(batch_id: str, model: str, input_tokens: int, output_tokens: int) 
         "VALUES (%s, %s, %s, %s, %s)",
         [batch_id, model, input_tokens, output_tokens, cost],
     )
-    logger.warning(
-        "LLM usage logged: batch=%s model=%s in=%d out=%d cost=$%.6f",
+    logger.info(
+        "LLM usage: batch=%s model=%s in=%d out=%d cost=$%.6f",
         batch_id, model, input_tokens, output_tokens, cost,
     )
 

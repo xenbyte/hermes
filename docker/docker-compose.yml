@@ -12,6 +12,8 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.bot
     container_name: hermes-bot
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     healthcheck:
       test: cat /proc/1/cmdline || exit 1
       start_period: 5s
@@ -28,6 +30,8 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.scraper
     container_name: hermes-scraper
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     healthcheck:
       test: pgrep cron || exit 1
       start_period: 5s
@@ -51,6 +55,7 @@ services:
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ENRICHMENT_INTERVAL_HOURS=${ENRICHMENT_INTERVAL_HOURS:-4}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks: 
       - hermes-network
     restart: unless-stopped
@@ -98,3 +103,4 @@ services:
       - FROM_EMAIL=${FROM_EMAIL}
       - BASE_URL=${BASE_URL}
       - LOG_FORMAT=${LOG_FORMAT:-plain}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}

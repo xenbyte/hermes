@@ -45,7 +45,7 @@ def enqueue_for_enrichment(new_homes: list[Home]) -> None:
                     if enqueue(home, profile["id"]):
                         enqueued += 1
 
-        logger.warning(
+        logger.info(
             "Enrichment: enqueued %d of %d new homes for %d profiles",
             enqueued, len(new_homes), len(profiles),
         )

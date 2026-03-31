@@ -7,6 +7,8 @@ import requests
 from urllib import parse
 from bs4 import BeautifulSoup, NavigableString
 
+logger = logging.getLogger(__name__)
+
 
 class Home:
     def __init__(self, address: str = '', city: str = '', url: str = '', agency: str = '', price: int = -1, sqm: int = -1):
@@ -815,7 +817,7 @@ class HomeResults:
                 extract_regex = re.compile(r"(.*)-([0-9]+)(-([a-zA-Z0-9]+))?")
                 matches = extract_regex.match(slug)
                 if not matches:
-                    logging.warning(f"Unable to pattern match woonzeker slug: {slug}")
+                    logger.warning("Unable to pattern match woonzeker slug: %s", slug)
                     continue
 
                 ext = matches.group(4)

@@ -105,16 +105,16 @@ def _fetch_playwright(url: str) -> FetchResult:
 def fetch_detail_page(url: str, agency: str) -> FetchResult:
     """Tiered fetch: HTTP first, Playwright fallback if content is thin."""
     if agency in PLAYWRIGHT_DETAIL_SITES:
-        logger.warning("fetch_detail_page: agency '%s' → direct Playwright for %s", agency, url)
+        logger.debug("fetch_detail_page: agency '%s' → direct Playwright for %s", agency, url)
         return _fetch_playwright(url)
 
     try:
         result = _fetch_http(url)
         if result.text and len(result.text) >= _MIN_CONTENT_LENGTH:
-            logger.warning("fetch_detail_page: HTTP ok (%d chars) for %s", len(result.text), url)
+            logger.debug("fetch_detail_page: HTTP ok (%d chars) for %s", len(result.text), url)
             return result
     except requests.RequestException as e:
-        logger.warning("fetch_detail_page: HTTP failed for %s: %r", url, e)
+        logger.info("fetch_detail_page: HTTP failed for %s: %r", url, e)
 
-    logger.warning("fetch_detail_page: HTTP content too short, trying Playwright for %s", url)
+    logger.debug("fetch_detail_page: HTTP content too short, trying Playwright for %s", url)
     return _fetch_playwright(url)
