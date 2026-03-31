@@ -8,6 +8,9 @@ RUN pip3 install -r /scraper/requirements.txt
 
 COPY hermes /scraper/hermes
 
+# Default cwd for kubectl exec; matches imports in scraper.py (hermes_utils is ./hermes_utils)
+WORKDIR /scraper/hermes
+
 RUN echo "*/5 * * * * root /usr/local/bin/python3 /scraper/hermes/scraper.py > /proc/1/fd/1 2>/proc/1/fd/2" >> /etc/crontab
 
 ARG APP_VERSION

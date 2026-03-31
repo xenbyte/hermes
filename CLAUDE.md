@@ -184,6 +184,9 @@ kubectl apply -f k8s/hermes/
 kubectl -n hermes logs -f deployment/hermes-bot
 kubectl -n hermes logs -f deployment/hermes-scraper
 
+# Postgres in K8s is StatefulSet `postgres` (service `hermes-database`); DB user is `hermes`, not `postgres`.
+# Scraper image `WORKDIR` is `/scraper/hermes` so `kubectl exec … deploy/hermes-scraper -- python3 -c "import hermes_utils…"` resolves imports.
+
 # Manage user access requests
 python hermes/cli.py list
 python hermes/cli.py approve <telegram_id>
