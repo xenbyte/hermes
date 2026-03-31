@@ -16,6 +16,9 @@ playground.*
 
 web/local_testing
 
+# Claude Code
+.claude/settings.local.json
+
 # macOS
 .DS_Store
 **/.DS_Store
