@@ -209,6 +209,20 @@ def get_enabled_targets_without_recent_homes(days: int = 7) -> list[RealDictRow]
         [days],
     )
 
+def approve_user(telegram_id: int) -> None:
+    _write("UPDATE hermes.subscribers SET approved = true WHERE telegram_id = %s", [str(telegram_id)])
+
+def deny_user(telegram_id: int) -> None:
+    _write("DELETE FROM hermes.subscribers WHERE telegram_id = %s AND approved = false", [str(telegram_id)])
+
+def get_pending_users() -> list[RealDictRow]:
+    return fetch_all("SELECT id, telegram_id, date_added FROM hermes.subscribers WHERE approved = false ORDER BY date_added")
+
+def is_user_approved(telegram_id: int) -> bool:
+    result = fetch_one("SELECT approved FROM hermes.subscribers WHERE telegram_id = %s", [str(telegram_id)])
+    return bool(result and result.get("approved"))
+
+
 def set_filter_minprice(telegram_chat: Chat, min_price: int) -> None:
     _write("UPDATE hermes.subscribers SET filter_min_price = %s WHERE telegram_id = %s", [str(min_price), str(telegram_chat.id)])
 def set_filter_maxprice(telegram_chat: Chat, max_price: int) -> None:

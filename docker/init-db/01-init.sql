@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS hermes.subscribers (
   email_address varchar NULL,
   device_id varchar(36) NULL,
   apns_token text NULL,
+  approved bool DEFAULT false NOT NULL,
   CONSTRAINT subscribers_device_id_key UNIQUE (device_id)
 );
 CREATE INDEX IF NOT EXISTS idx_subscribers_email_address ON hermes.subscribers USING btree (email_address);
