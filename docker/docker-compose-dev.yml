@@ -8,6 +8,9 @@ volumes:
 
 services:
   hestia-bot-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.bot
     container_name: hestia-bot-dev
     healthcheck:
       test: cat /proc/1/cmdline || exit 1
@@ -21,6 +24,9 @@ services:
     working_dir: /hestia
 
   hestia-scraper-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.scraper
     container_name: hestia-scraper-dev
     healthcheck:
       test: pgrep cron || exit 1
@@ -34,6 +40,9 @@ services:
     working_dir: /scraper
 
   hestia-analyzer-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.analyzer
     container_name: hestia-analyzer-dev
     healthcheck:
       test: pgrep cron || exit 1
@@ -67,6 +76,9 @@ services:
       - hestia-database-volume-dev:/var/lib/postgresql/data
 
   hestia-web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
     container_name: hestia-web-dev
     image: xenbyte/hestia-web:dev
     networks:
