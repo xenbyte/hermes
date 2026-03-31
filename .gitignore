@@ -18,6 +18,7 @@ web/local_testing
 
 # Claude Code
 .claude/settings.local.json
+.claude/agent-memory/
 
 # macOS
 .DS_Store
