@@ -12,7 +12,7 @@ services:
     healthcheck:
       test: cat /proc/1/cmdline || exit 1
       start_period: 5s
-    image: wtfloris/hestia-bot:latest
+    image: xenbyte/hestia-bot:latest
     networks: 
       - hestia-network
     restart: unless-stopped
@@ -25,13 +25,29 @@ services:
     healthcheck:
       test: pgrep cron || exit 1
       start_period: 5s
-    image: wtfloris/hestia-scraper:latest
+    image: xenbyte/hestia-scraper:latest
     networks: 
       - hestia-network
     restart: unless-stopped
     volumes:
       - /root/hestia/data:/data
     working_dir: /scraper
+
+  hestia-analyzer:
+    container_name: hestia-analyzer
+    healthcheck:
+      test: pgrep cron || exit 1
+      start_period: 5s
+    image: xenbyte/hestia-analyzer:latest
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ENRICHMENT_INTERVAL_HOURS=${ENRICHMENT_INTERVAL_HOURS:-4}
+    networks: 
+      - hestia-network
+    restart: unless-stopped
+    volumes:
+      - /root/hestia/data:/data
+    working_dir: /analyzer
 
   hestia-database:
     container_name: hestia-database
@@ -52,7 +68,7 @@ services:
 
   hestia-web:
     container_name: hestia-web
-    image: wtfloris/hestia-web:latest
+    image: xenbyte/hestia-web:latest
     networks:
       - hestia-network
     ports:
