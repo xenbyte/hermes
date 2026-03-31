@@ -14,17 +14,29 @@ Fork of [wtfloris/hestia](https://github.com/wtfloris/hestia), extended with AI 
 
 ## Architecture
 
-Five Docker containers, one shared PostgreSQL database (`hermes` schema):
+Five application images plus PostgreSQL, one shared database (`hermes` schema). Run locally with **Docker Compose** (`docker/`) or on-cluster with **Kubernetes** (`k8s/hermes/`).
 
 | Service | Source | Purpose |
 |---|---|---|
 | `hermes-bot` | `hermes/bot.py` | Long-polling Telegram bot; handles all user commands and callbacks |
 | `hermes-scraper` | `hermes/scraper.py` | Cron every 5 min; scrapes targets, writes `homes`, broadcasts to subscribers |
 | `hermes-analyzer` | `hermes/enrichment/analyzer.py` | Cron every N hours; drains enrichment queue, calls Claude, sends enriched messages |
-| `hermes-web` | `web/hermes_web/app.py` | Flask dashboard on port 19191; filter management, magic-link email auth |
-| `hermes-database` | PostgreSQL 16 | All persistent state |
+| `hermes-web` | `web/hermes_web/app.py` | Flask dashboard; filter management, magic-link email auth (Compose: port 19191; container listens on 5050) |
+| `hermes-database` | PostgreSQL | All persistent state (Compose prod: `postgres:15`; dev override: `postgres:16`) |
 
-All services write logs to `docker/data/hermes.log` (mounted as `/data/hermes.log` inside containers).
+**Docker Compose:** services write logs to `docker/data/hermes.log` (mounted as `/data/hermes.log` inside containers).
+
+**Kubernetes:** images are `ghcr.io/xenbyte/hermes-{bot,scraper,analyzer,web}:latest`, built and pushed on every push to `master` (see `.github/workflows/build.yml`). Namespace `hermes`. Manifests:
+
+| Manifest | Kind | Notes |
+|---|---|---|
+| `namespace.yaml` | Namespace | `hermes` |
+| `configmap.yaml` | ConfigMap | `hermes-init-sql` — bootstrap SQL (keep in sync with `docker/init-db/01-init.sql` when schema changes) |
+| `postgres.yaml` | StatefulSet + Service | `postgres:15`, PVC `local-path` 10Gi, service `hermes-database:5432` |
+| `bot.yaml` / `scraper.yaml` / `analyzer.yaml` | Deployment | `secrets.py` from Secret `hermes-secrets-py`; `/data` as `emptyDir` |
+| `web.yaml` | Deployment + Service + Ingress | Service port 80 → 5050; Ingress host `hermes.xenbyte.dev` (nginx, cert-manager `letsencrypt-prod`) |
+
+**K8s secrets (not in repo):** create at least `hermes-env` (keys used by manifests include `POSTGRES_PASSWORD`, `LOG_LEVEL`, `ANTHROPIC_API_KEY`, `ENRICHMENT_INTERVAL_HOURS`; web uses `envFrom` so it needs the same vars as `docker/.env` for Flask/email), `hermes-secrets-py` (file key `secrets.py`), and `ghcr-pull-secret` for private GHCR pulls if required.
 
 ---
 
@@ -55,6 +67,7 @@ hermes/
 │   └── requirements.txt
 ├── web/
 │   ├── hermes_web/app.py       # Flask app
+│   ├── Dockerfile              # Image for hermes-web (GHCR / K8s)
 │   ├── templates/              # Jinja2 HTML templates
 │   ├── static/                 # CSS/JS assets
 │   └── requirements.txt
@@ -65,6 +78,14 @@ hermes/
 │   ├── Dockerfile.bot / .scraper / .analyzer
 │   ├── init-db/01-init.sql     # Schema bootstrap on first start
 │   └── data/                   # Persistent log files (gitignored)
+├── k8s/hermes/                 # Kubernetes manifests (namespace, DB, workloads, ingress)
+│   ├── namespace.yaml
+│   ├── configmap.yaml          # hermes-init-sql (duplicate of init SQL for K8s)
+│   ├── postgres.yaml
+│   ├── bot.yaml / scraper.yaml / analyzer.yaml / web.yaml
+├── .github/workflows/
+│   ├── ci.yml                  # PR: tests + encrypted-SQL check
+│   └── build.yml               # push to master: build/push GHCR images
 ├── tests/                      # pytest test suite
 │   ├── conftest.py
 │   ├── test_db.py
@@ -115,7 +136,7 @@ All tables in the `hermes` schema. Core tables:
 | Variable | Purpose |
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude API key — required for analyzer service |
-| `DATABASE_URL` | PostgreSQL DSN — default: `postgresql://hermes:hermes@hermes-database:5432/hermes` |
+| `DATABASE_URL` | PostgreSQL DSN — default: `postgresql://hermes:hermes@hermes-database:5432/hermes` (K8s: same host `hermes-database` in-namespace) |
 | `SECRET_KEY` | Flask session secret — must be changed in production |
 | `BREVO_API_KEY` | Email service for web dashboard magic links (optional) |
 | `FROM_EMAIL` | Sender email address |
@@ -157,6 +178,11 @@ docker logs -f hermes-analyzer
 
 # Connect to database
 docker exec -it hermes-database psql -U hermes -d hermes
+
+# Kubernetes (after kubeconfig and namespace exist)
+kubectl apply -f k8s/hermes/
+kubectl -n hermes logs -f deployment/hermes-bot
+kubectl -n hermes logs -f deployment/hermes-scraper
 
 # Manage user access requests
 python hermes/cli.py list
@@ -215,7 +241,8 @@ Unless explicitly asked:
 - **Framework:** `pytest` with `pytest-asyncio`
 - Tests do NOT mock the database by default — use a real test DB where needed
 - Parser tests are comprehensive (`test_parsers.py` — 60KB); run them after any scraper changes
-- CI runs on every PR via `.github/workflows/ci.yml`
+- CI runs on every PR via `.github/workflows/ci.yml` (pytest + plaintext `misc/sql` guard)
+- Pushes to `master` build and push container images to `ghcr.io/xenbyte/` via `.github/workflows/build.yml`
 
 ---
 
@@ -232,6 +259,7 @@ After completing any code task:
 
 Update this file (`CLAUDE.md`) whenever:
 - New services or Docker containers are added
+- Kubernetes manifests, ingress hosts, or GHCR image names change
 - New tables are added to the database schema
 - New environment variables are introduced
 - Architectural patterns or conventions change
@@ -254,3 +282,15 @@ Update `README.md` whenever:
 - Do not add unnecessary abstractions. If something works in 3 lines, don't create a utility class for it.
 - If a task touches the enrichment pipeline, re-read `plans/context.md` for the full design intent.
 - Always run tests after making code changes: `python -m pytest -q`
+
+---
+
+## Recent repository history (context for agents)
+
+High-level themes from recent `master` commits (newest first):
+
+- **CI/CD & K8s:** GitHub Actions build pipeline pushing four images to GHCR; `k8s/hermes/` manifests for full stack including Ingress.
+- **Tooling / repo hygiene:** `.gitignore` hardening; local-only paths for Claude agent memory and editor settings excluded from version control.
+- **Bot UX & access:** `/start` welcome flow, `/register` for signup, `/info`; commands gated on `subscribers.approved`; `cli.py` to list/approve/deny requests.
+- **Observability:** Centralized file logging with `LOG_LEVEL` across services.
+- **Product:** Rebrand Hestia → Hermes; Xenbyte org; enrichment pipeline (analyzer, profiles, letters, tests); Docker build contexts and `./data` volumes.
