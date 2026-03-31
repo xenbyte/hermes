@@ -10,6 +10,7 @@ misc/sql/*.sql
 error.log
 hestia.log
 data/*
+docker/data/
 secrets.py
 playground.*
 

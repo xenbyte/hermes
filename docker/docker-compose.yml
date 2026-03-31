@@ -20,7 +20,7 @@ services:
       - hestia-network
     restart: unless-stopped
     volumes:
-      - /root/hestia/data:/data
+      - ./data:/data
     working_dir: /hestia
 
   hestia-scraper:
@@ -36,7 +36,7 @@ services:
       - hestia-network
     restart: unless-stopped
     volumes:
-      - /root/hestia/data:/data
+      - ./data:/data
     working_dir: /scraper
 
   hestia-analyzer:
@@ -55,7 +55,7 @@ services:
       - hestia-network
     restart: unless-stopped
     volumes:
-      - /root/hestia/data:/data
+      - ./data:/data
     working_dir: /analyzer
 
   hestia-database:
