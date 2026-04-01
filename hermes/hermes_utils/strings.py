@@ -72,10 +72,10 @@ If you have any questions, please read the /faq\!
     "stop": {
         "en": rf"""You will no longer receive updates for new listings\. I hope this is because you've found a new home\!
         
-Consider [buying me a beer]({{}}) if Hermes has helped you in your search {LOVE_EMOJI}""",
+Consider [buying me a coffee]({{}}) if Hermes has helped you in your search {LOVE_EMOJI}""",
         "nl": rf"""Je ontvangt geen updates meer voor nieuwe woningen\. Ik hoop dat dit is omdat je een nieuw huis hebt gevonden\!
 
-Je kunt eventueel [een biertje voor me kopen]({{}}) als Hermes je heeft geholpen in je zoektocht {LOVE_EMOJI}"""
+Je kunt eventueel [een koffie voor me kopen]({{}}) als Hermes je heeft geholpen in je zoektocht {LOVE_EMOJI}"""
     },
     
     "websites": {
@@ -187,12 +187,12 @@ Een groen vinkje betekent dat je woningen van die makelaar ontvangt, een rood kr
     "donate": {
         "en": rf"""Moving is expensive enough and similar services start at like €20/month\. Hopefully Hermes has helped you save some money\!
         
-You could use some of those savings to [buy me a beer]({{}}) {LOVE_EMOJI}
+You could use some of those savings to [buy me a coffee]({{}}) {LOVE_EMOJI}
 
 Good luck in your search\!""",
         "nl": rf"""Verhuizen is al duur genoeg en vergelijkbare diensten kosten minimaal €20/maand\. Hopelijk heeft Hermes je geholpen wat geld te besparen\!
 
-Je kunt een deel van die besparing eventueel gebruiken om [een biertje voor me te kopen]({{}}) {LOVE_EMOJI}
+Je kunt een deel van die besparing eventueel gebruiken om [een koffie voor me te kopen]({{}}) {LOVE_EMOJI}
 
 Succes met je zoektocht\!"""
     },
@@ -223,7 +223,7 @@ Succes met je zoektocht\!"""
     Yes\! You can use the website with your linked account\.
 
 *Can I thank you for building and sharing Hermes for free?*
-    Yes of course, you can buy me a beer [with this Tikkie]({{}})\! {LOVE_EMOJI}
+    Yes of course, you can buy me a coffee [with this Tikkie]({{}})\! {LOVE_EMOJI}
 
 *Can I contact you?*
     Yes — see [the project on GitHub](https://github.com/xenbyte/hermes) for ways to get in touch\!""",
@@ -253,7 +253,7 @@ Succes met je zoektocht\!"""
     Ja\! Je kunt de website gebruiken met je gekoppelde account\.
 
 *Kan ik je bedanken voor het bouwen en delen van Hermes?*
-    Jazeker, je kunt [met dit Tikkie]({{}}) een biertje voor me kopen\! {LOVE_EMOJI}
+    Jazeker, je kunt [met dit Tikkie]({{}}) een koffie voor me kopen\! {LOVE_EMOJI}
 
 *Kan ik contact met je opnemen?*
     Ja — zie [het project op GitHub](https://github.com/xenbyte/hermes) voor manieren om contact op te nemen\!"""
@@ -322,7 +322,7 @@ Succes met je zoektocht\!"""
 /filter - Bekijk en wijzig je persoonlijke filters
 /websites - Bekijk welke websites Hermes checkt
 /profile - Stel je AI-profiel in (woningscores + motivatiebrieven)
-/donate - Ontvang een open Tikkie link en waardeer Hermes met een biertje voor de maker
+/donate - Ontvang een open Tikkie link en waardeer Hermes met een koffie voor de maker
 /link - Koppel je website-account aan Telegram
 
 /nl - Gebruik Hermes in het Nederlands

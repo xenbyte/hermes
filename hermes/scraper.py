@@ -137,7 +137,7 @@ async def main() -> None:
                 sleep(1/29)  # avoid rate limit (broadcasting to max 30 users per second)
                 message = rf"""Thanks for using Hermes, I\'ve put a lot of work into it and I hope it\'s helping you out\!
                 
-Moving is expensive enough and similar scraping services start at like €20/month\. Hopefully Hermes has helped you save some money\! With this open Tikkie you could use some of those savings to [buy me a beer]({donation_link}) {meta.LOVE_EMOJI}
+Moving is expensive enough and similar scraping services start at like €20/month\. Hopefully Hermes has helped you save some money\! With this open Tikkie you could use some of those savings to [buy me a coffee]({donation_link}) {meta.LOVE_EMOJI}
 
 Good luck in your search\!"""
                 try:
