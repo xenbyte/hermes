@@ -218,11 +218,21 @@ def run_on_demand_analysis(url_hash: str, telegram_id: str) -> str:
 
     profile_id = profile["id"]
 
-    # Return cached reply if available
+    # Return cached reply if available (cache hits never count against the limit)
     cached = get_cached_reply(url_hash, profile_id)
     if cached:
         logger.info("on_demand: cache hit url_hash=%s profile_id=%s", url_hash, profile_id)
         return cached
+
+    # Check daily analysis limit (only for fresh analyses)
+    limit = db.get_analysis_limit(int(telegram_id))
+    if limit != -1:
+        used = db.get_daily_analysis_count(profile_id)
+        if used >= limit:
+            return (
+                f"⚠️ You've used all {limit} AI analyses for today\\.\n"
+                "Resets at midnight UTC\\."
+            )
 
     # Look up the home
     home = db.fetch_one("SELECT * FROM hermes.homes WHERE url_hash = %s", [url_hash])

@@ -96,13 +96,11 @@ async def register(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) 
         name = await get_sub_name(update, context)
         logger.info("New subscriber: %s (chat_id=%s)", name, update.effective_chat.id)
         db.add_user(update.effective_chat.id)
-        await context.bot.send_message(update.effective_chat.id, strings.get("pending_approval", update.effective_chat.id))
-    elif not checksub.get("approved"):
-        await context.bot.send_message(update.effective_chat.id, strings.get("register_pending", update.effective_chat.id))
+        await context.bot.send_message(update.effective_chat.id, strings.get("start", update.effective_chat.id), parse_mode="MarkdownV2")
     elif checksub["telegram_enabled"]:
         await context.bot.send_message(update.effective_chat.id, strings.get("register_already", update.effective_chat.id))
     else:
-        # Approved but previously stopped — re-enable
+        # Previously stopped — re-enable
         name = await get_sub_name(update, context)
         logger.info("Re-enabled subscriber: %s (chat_id=%s)", name, update.effective_chat.id)
         db.enable_user(update.effective_chat.id)

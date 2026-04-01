@@ -1,4 +1,4 @@
--- On-demand listing analysis schema migration
+-- On-demand listing analysis + open registration schema migration
 -- Apply via:
 --   kubectl exec -i -n hermes statefulset/postgres -- psql -U hermes -d hermes < misc/20260401_on_demand_schema.sql
 --   docker exec -i hermes-database psql -U hermes -d hermes < misc/20260401_on_demand_schema.sql
@@ -24,3 +24,6 @@ CREATE TABLE IF NOT EXISTS hermes.listing_analysis (
     PRIMARY KEY (url_hash, profile_id)
 );
 CREATE INDEX IF NOT EXISTS idx_listing_analysis_profile ON hermes.listing_analysis (profile_id);
+
+-- Per-user daily AI analysis limit (-1 = unlimited)
+ALTER TABLE hermes.subscribers ADD COLUMN IF NOT EXISTS daily_analysis_limit INT NOT NULL DEFAULT 5;

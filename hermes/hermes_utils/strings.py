@@ -277,24 +277,20 @@ Succes met je zoektocht\!"""
     },
 
     "pending_approval": {
-        "en": "Your access request has been received. You'll be notified when you are approved.",
-        "nl": "Je aanvraag is ontvangen. Je krijgt een bericht zodra je bent goedgekeurd."
-    },
-    "register_pending": {
-        "en": "Your access request is still being reviewed. We'll notify you as soon as you're approved.",
-        "nl": "Je aanvraag wordt nog beoordeeld. We laten je weten zodra je bent goedgekeurd."
+        "en": "You're not registered yet. Use /register to get started!",
+        "nl": "Je bent nog niet geregistreerd. Gebruik /register om te beginnen!"
     },
     "register_already": {
         "en": "You're already registered! Use /help to see what I can do for you.",
         "nl": "Je bent al geregistreerd! Gebruik /help om te zien wat ik voor je kan doen."
     },
-    "approved_notification": {
-        "en": "Your access has been approved! Use /help to see what I can do for you.",
-        "nl": "Je toegang is goedgekeurd! Gebruik /help om te zien wat ik voor je kan doen."
+    "promoted_notification": {
+        "en": "You've been upgraded to unlimited AI analyses!",
+        "nl": "Je hebt nu onbeperkt toegang tot AI-analyses!"
     },
-    "denied_notification": {
-        "en": "Your access request has been denied.",
-        "nl": "Je aanvraag is helaas afgewezen."
+    "banned_notification": {
+        "en": "Your account has been removed.",
+        "nl": "Je account is verwijderd."
     },
 
     "help": {

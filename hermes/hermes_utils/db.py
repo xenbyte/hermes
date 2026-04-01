@@ -109,8 +109,38 @@ def add_home(url: str, address: str, city: str, price: int, agency: str, date_ad
 def get_home_by_hash(url_hash: str) -> dict:
     return fetch_one("SELECT * FROM hermes.homes WHERE url_hash = %s", [url_hash])
 def add_user(telegram_id: int) -> None:
-    # Use an explicit column list so this stays valid when new columns are added to subscribers.
-    _write("INSERT INTO hermes.subscribers (telegram_enabled, telegram_id) VALUES (true, %s)", [str(telegram_id)])
+    # Auto-approve on registration — no manual approval gate.
+    _write(
+        "INSERT INTO hermes.subscribers (telegram_enabled, telegram_id, approved) VALUES (true, %s, true)",
+        [str(telegram_id)],
+    )
+
+
+def get_daily_analysis_count(profile_id: int) -> int:
+    """Count fresh (non-cached) analyses run today for this profile."""
+    result = fetch_one(
+        "SELECT COUNT(*) FROM hermes.listing_analysis "
+        "WHERE profile_id = %s AND created_at >= CURRENT_DATE",
+        [profile_id],
+    )
+    return int(result.get("count", 0))
+
+
+def get_analysis_limit(telegram_id: int) -> int:
+    """-1 means unlimited."""
+    result = fetch_one(
+        "SELECT daily_analysis_limit FROM hermes.subscribers WHERE telegram_id = %s",
+        [str(telegram_id)],
+    )
+    return int(result.get("daily_analysis_limit", 5)) if result else 5
+
+
+def promote_user(telegram_id: int) -> None:
+    """Grant unlimited AI analyses."""
+    _write(
+        "UPDATE hermes.subscribers SET daily_analysis_limit = -1 WHERE telegram_id = %s",
+        [str(telegram_id)],
+    )
 def enable_user(telegram_id: int) -> None:
     _write("UPDATE hermes.subscribers SET telegram_enabled = true WHERE telegram_id = %s", [str(telegram_id)])
 def disable_user(telegram_id: int) -> None:
