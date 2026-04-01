@@ -223,7 +223,7 @@ Succes met je zoektocht\!"""
     Yes\! You can use the website with your linked account\.
 
 *Can I thank you for building and sharing Hermes for free?*
-    Yes of course, you can buy me a coffee [with this Tikkie]({{}})\! {LOVE_EMOJI}
+    Yes of course\! You can [buy me a coffee on Ko\-fi]({{}})\! {LOVE_EMOJI}
 
 *Can I contact you?*
     Yes — see [the project on GitHub](https://github.com/xenbyte/hermes) for ways to get in touch\!""",
@@ -253,7 +253,7 @@ Succes met je zoektocht\!"""
     Ja\! Je kunt de website gebruiken met je gekoppelde account\.
 
 *Kan ik je bedanken voor het bouwen en delen van Hermes?*
-    Jazeker, je kunt [met dit Tikkie]({{}}) een koffie voor me kopen\! {LOVE_EMOJI}
+    Jazeker\! Je kunt [een koffie kopen via Ko\-fi]({{}})\! {LOVE_EMOJI}
 
 *Kan ik contact met je opnemen?*
     Ja — zie [het project op GitHub](https://github.com/xenbyte/hermes) voor manieren om contact op te nemen\!"""
@@ -303,7 +303,7 @@ Succes met je zoektocht\!"""
 /filter - Show and modify your personal filters
 /websites - Show info about the websites Hermes checks
 /profile - Set up your AI enrichment profile (scoring + motivation letters)
-/donate - Get an open Tikkie link to show your appreciation for Hermes
+/donate - Support Hermes with a coffee on Ko-fi
 /link - Link your website account to Telegram
 
 /nl - Gebruik Hermes in het Nederlands
@@ -318,7 +318,7 @@ Succes met je zoektocht\!"""
 /filter - Bekijk en wijzig je persoonlijke filters
 /websites - Bekijk welke websites Hermes checkt
 /profile - Stel je AI-profiel in (woningscores + motivatiebrieven)
-/donate - Ontvang een open Tikkie link en waardeer Hermes met een koffie voor de maker
+/donate - Steun Hermes met een koffie via Ko-fi
 /link - Koppel je website-account aan Telegram
 
 /nl - Gebruik Hermes in het Nederlands

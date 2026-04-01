@@ -480,13 +480,22 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
     # On-demand listing analysis
     elif query.data.startswith("analyse:"):
         url_hash = query.data.split(":", 1)[1]
-        await query.answer("Analysing listing, please wait…")
+        await query.answer()
 
-        # Disable the button while analysis runs
+        # Disable the button immediately so it can't be double-tapped
         try:
             await query.edit_message_reply_markup(None)
         except Exception:
             pass
+
+        loading_msg = await query.message.reply_text(
+            "⚡ *Analysis in progress*\n\n"
+            "🌐 Fetching listing details\n"
+            "🤖 Consulting the AI\n"
+            "📊 Building your report\n\n"
+            "_Hang tight — this takes about 15 seconds…_",
+            parse_mode="MarkdownV2",
+        )
 
         try:
             import asyncio
@@ -494,10 +503,10 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
             reply = await asyncio.to_thread(
                 run_on_demand_analysis, url_hash, str(query.message.chat.id)
             )
-            await query.message.reply_text(reply, parse_mode="MarkdownV2", disable_web_page_preview=True)
+            await loading_msg.edit_text(reply, parse_mode="MarkdownV2", disable_web_page_preview=True)
         except Exception as e:
             logger.error("on_demand analysis callback failed: %r", e)
-            await query.message.reply_text("Something went wrong running the analysis\\. Please try again\\.", parse_mode="MarkdownV2")
+            await loading_msg.edit_text("Something went wrong running the analysis\\. Please try again\\.", parse_mode="MarkdownV2")
 
     # Letter generation callbacks (colon-separated)
     elif query.data.startswith("letter_"):
