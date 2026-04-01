@@ -3,6 +3,7 @@ import logging
 import hashlib
 import traceback
 import requests
+from curl_cffi import requests as cf_requests
 from collections import Counter
 from time import sleep
 from asyncio import run
@@ -256,6 +257,8 @@ async def broadcast(homes: list[Home]) -> None:
 async def scrape_site(target: dict) -> None:
     if target["method"] == "GET":
         r = requests.get(target["queryurl"], headers=target["headers"])
+    elif target["method"] == "CF_GET":
+        r = cf_requests.get(target["queryurl"], headers=target["headers"], impersonate="chrome124")
     elif target["method"] == "POST":
         r = requests.post(target["queryurl"], json=target["post_data"], headers=target["headers"])
     elif target["method"] == "POST_NDJSON":
