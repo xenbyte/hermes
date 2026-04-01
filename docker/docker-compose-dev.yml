@@ -43,26 +43,6 @@ services:
       - ./data:/data
     working_dir: /scraper
 
-  hermes-analyzer-dev:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.analyzer
-    container_name: hermes-analyzer-dev
-    healthcheck:
-      test: pgrep cron || exit 1
-      start_period: 5s
-    image: xenbyte/hermes-analyzer:dev
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ENRICHMENT_INTERVAL_HOURS=${ENRICHMENT_INTERVAL_HOURS:-4}
-      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
-    networks: 
-      - hermes-network-dev
-    restart: unless-stopped
-    volumes:
-      - ./data:/data
-    working_dir: /analyzer
-
   hermes-database-dev:
     container_name: hermes-database-dev
     healthcheck:

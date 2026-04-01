@@ -479,6 +479,28 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
         await query.answer()
         await query.edit_message_reply_markup(telegram.InlineKeyboardMarkup(reply_keyboard))
 
+    # On-demand listing analysis
+    elif query.data.startswith("analyse:"):
+        url_hash = query.data.split(":", 1)[1]
+        await query.answer("Analysing listing, please wait…")
+
+        # Disable the button while analysis runs
+        try:
+            await query.edit_message_reply_markup(None)
+        except Exception:
+            pass
+
+        try:
+            import asyncio
+            from enrichment.on_demand import run_on_demand_analysis
+            reply = await asyncio.to_thread(
+                run_on_demand_analysis, url_hash, str(query.message.chat.id)
+            )
+            await query.message.reply_text(reply, parse_mode="MarkdownV2", disable_web_page_preview=True)
+        except Exception as e:
+            logger.error("on_demand analysis callback failed: %r", e)
+            await query.message.reply_text("Something went wrong running the analysis\\. Please try again\\.", parse_mode="MarkdownV2")
+
     # Letter generation callbacks (colon-separated)
     elif query.data.startswith("letter_"):
         parts = query.data.split(":", 1)
@@ -516,9 +538,9 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
 
 # ─── Profile wizard ──────────────────────────────────────────────────────────
 # States for ConversationHandler
-(P_NAME, P_NATIONALITY, P_EMPLOYER, P_CONTRACT,
+(P_NAME, P_NATIONALITY, P_EMPLOYER, P_WORK_ADDRESS, P_CONTRACT,
  P_INCOME, P_MAX_RENT, P_CITIES, P_OCCUPANTS,
- P_PETS, P_MOVE_IN, P_NOTES) = range(11)
+ P_PETS, P_MOVE_IN, P_NOTES) = range(12)
 
 
 async def _profile_cancel(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -544,6 +566,14 @@ async def _ask_employer(update: telegram.Update, context: ContextTypes.DEFAULT_T
         "Where do you work? (employer name)\n/skip to skip"
     )
     return P_EMPLOYER
+
+
+async def _ask_work_address(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "What's the address of your workplace? (used for commute estimates, e.g. Keizersgracht 123, Amsterdam)\n/skip to skip"
+    )
+    return P_WORK_ADDRESS
 
 
 async def _ask_contract(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -679,9 +709,19 @@ async def _p_skip_nationality(update: telegram.Update, context: ContextTypes.DEF
 async def _p_employer(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not update.effective_chat or not update.message or not update.message.text: return P_EMPLOYER
     context.user_data["profile"]["employer"] = update.message.text.strip()
-    return await _ask_contract(update, context)
+    return await _ask_work_address(update, context)
 
 async def _p_skip_employer(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat: return ConversationHandler.END
+    return await _ask_work_address(update, context)
+
+
+async def _p_work_address(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_WORK_ADDRESS
+    context.user_data["profile"]["work_address"] = update.message.text.strip()
+    return await _ask_contract(update, context)
+
+async def _p_skip_work_address(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not update.effective_chat: return ConversationHandler.END
     return await _ask_contract(update, context)
 
@@ -844,7 +884,8 @@ async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYP
 
     labels = [
         ("full_name", "Name"), ("nationality", "Nationality"), ("employer", "Employer"),
-        ("contract_type", "Contract"), ("gross_monthly_income", "Income (EUR/mo)"),
+        ("work_address", "Work address"), ("contract_type", "Contract"),
+        ("gross_monthly_income", "Income (EUR/mo)"),
         ("max_rent", "Max rent"), ("target_cities", "Cities"), ("occupants", "Occupants"),
         ("pets", "Pets"), ("move_in_date", "Move-in"), ("extra_notes", "Notes"),
     ]
@@ -950,23 +991,25 @@ if __name__ == '__main__':
     application.add_handler(ConversationHandler(
         entry_points=[CommandHandler("profile", profile_cmd)],
         states={
-            P_NAME:       [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_name)],
-            P_NATIONALITY:[MessageHandler(filters.TEXT & ~filters.COMMAND, _p_nationality),
-                           CommandHandler("skip", _p_skip_nationality)],
-            P_EMPLOYER:   [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_employer),
-                           CommandHandler("skip", _p_skip_employer)],
-            P_CONTRACT:   [CallbackQueryHandler(_p_contract, pattern="^pwiz_contract:")],
-            P_INCOME:     [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_income),
-                           CommandHandler("skip", _p_skip_income)],
-            P_MAX_RENT:   [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_max_rent)],
-            P_CITIES:     [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_cities)],
-            P_OCCUPANTS:  [CallbackQueryHandler(_p_occupants, pattern="^pwiz_occupants:")],
-            P_PETS:       [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_pets),
-                           CommandHandler("skip", _p_skip_pets)],
-            P_MOVE_IN:    [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_move_in),
-                           CommandHandler("skip", _p_skip_move_in)],
-            P_NOTES:      [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_notes),
-                           CommandHandler("skip", _p_skip_notes)],
+            P_NAME:         [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_name)],
+            P_NATIONALITY:  [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_nationality),
+                             CommandHandler("skip", _p_skip_nationality)],
+            P_EMPLOYER:     [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_employer),
+                             CommandHandler("skip", _p_skip_employer)],
+            P_WORK_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_work_address),
+                             CommandHandler("skip", _p_skip_work_address)],
+            P_CONTRACT:     [CallbackQueryHandler(_p_contract, pattern="^pwiz_contract:")],
+            P_INCOME:       [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_income),
+                             CommandHandler("skip", _p_skip_income)],
+            P_MAX_RENT:     [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_max_rent)],
+            P_CITIES:       [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_cities)],
+            P_OCCUPANTS:    [CallbackQueryHandler(_p_occupants, pattern="^pwiz_occupants:")],
+            P_PETS:         [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_pets),
+                             CommandHandler("skip", _p_skip_pets)],
+            P_MOVE_IN:      [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_move_in),
+                             CommandHandler("skip", _p_skip_move_in)],
+            P_NOTES:        [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_notes),
+                             CommandHandler("skip", _p_skip_notes)],
         },
         fallbacks=[CommandHandler("cancel", _profile_cancel)],
         allow_reentry=True,

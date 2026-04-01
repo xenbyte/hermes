@@ -1,3 +1,4 @@
+import hashlib
 import psycopg2
 import logging
 import json
@@ -97,7 +98,16 @@ def _write(query: str, params: list[str] = []) -> None:
 
 def add_home(url: str, address: str, city: str, price: int, agency: str, date_added: str, sqm: int = -1) -> None:
     logger.debug("add_home: %s, %s (%s) €%s", address, city, agency, price)
-    _write("INSERT INTO hermes.homes (url, address, city, price, agency, date_added, sqm) VALUES (%s, %s, %s, %s, %s, %s, %s)", [url, address, city, str(price), agency, date_added, str(sqm)])
+    url_hash = hashlib.sha256(url.encode()).hexdigest()[:32]
+    _write(
+        "INSERT INTO hermes.homes (url, url_hash, address, city, price, agency, date_added, sqm) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        [url, url_hash, address, city, str(price), agency, date_added, str(sqm)],
+    )
+
+
+def get_home_by_hash(url_hash: str) -> dict:
+    return fetch_one("SELECT * FROM hermes.homes WHERE url_hash = %s", [url_hash])
 def add_user(telegram_id: int) -> None:
     # Use an explicit column list so this stays valid when new columns are added to subscribers.
     _write("INSERT INTO hermes.subscribers (telegram_enabled, telegram_id) VALUES (true, %s)", [str(telegram_id)])

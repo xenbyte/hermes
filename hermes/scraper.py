@@ -7,6 +7,7 @@ from curl_cffi import requests as cf_requests
 from collections import Counter
 from time import sleep
 from asyncio import run
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import Forbidden
 from datetime import datetime, timedelta
 
@@ -16,7 +17,6 @@ import hermes_utils.secrets as secrets
 import hermes_utils.apns as apns
 from hermes_utils.parser import Home, HomeResults
 from hermes_utils.logging_config import setup_logging
-from enrichment.prefilter import enqueue_for_enrichment
 
 logger = logging.getLogger(__name__)
 
@@ -188,18 +188,30 @@ async def broadcast(homes: list[Home]) -> None:
                (home.agency in sub["filter_agencies"]) and \
                sqm_ok:
 
-                message = f"{meta.HOUSE_EMOJI} {home.address}, {home.city}\n"
-                message += f"{meta.EURO_EMOJI} €{home.price}/m\n"
-                if home.sqm > 0:
-                    message += f"{meta.SQM_EMOJI} {home.sqm} m\u00b2\n"
-                message += "\n"
-                message = meta.escape_markdownv2(message)
                 agency_name = agencies[home.agency]
-                message += f"{meta.LINK_EMOJI} [{agency_name}]({home.url})"
+                url_hash = hashlib.sha256(home.url.encode()).hexdigest()[:32]
+
+                price_line = f"💶 €{home.price:,}/mo"
+                if home.sqm > 0:
+                    price_line += f"  ·  📐 {home.sqm} m\u00b2"
+
+                message = f"{meta.HOUSE_EMOJI} {home.address}, {home.city}\n\n"
+                message += price_line + "\n"
+                message = meta.escape_markdownv2(message)
+                message += f"🏢 [{meta.escape_markdownv2(agency_name)}]({home.url})"
+
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔍 Analyse this listing", callback_data=f"analyse:{url_hash}"),
+                ]])
 
                 if sub.get("telegram_enabled") and sub.get("telegram_id"):
                     try:
-                        await meta.BOT.send_message(text=message, chat_id=sub["telegram_id"], parse_mode="MarkdownV2")
+                        await meta.BOT.send_message(
+                            text=message,
+                            chat_id=sub["telegram_id"],
+                            parse_mode="MarkdownV2",
+                            reply_markup=keyboard,
+                        )
                     except Forbidden as e:
                         # This means the user deleted their account or blocked the bot, so disable them
                         db.disable_user(sub["telegram_id"])
@@ -289,11 +301,6 @@ async def scrape_site(target: dict) -> None:
                         home.sqm)
 
         await broadcast(new_homes)
-
-        try:
-            enqueue_for_enrichment(new_homes)
-        except Exception as e:
-            logger.error("Enrichment enqueue failed: %r", e)
     else:
         raise ConnectionError(f"Got a non-OK status code: {r.status_code}")
     
