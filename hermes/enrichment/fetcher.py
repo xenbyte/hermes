@@ -7,6 +7,13 @@ from bs4 import BeautifulSoup
 logger = logging.getLogger(__name__)
 
 try:
+    from curl_cffi import requests as cf_requests
+    HAS_CURL_CFFI = True
+except ImportError:
+    HAS_CURL_CFFI = False
+    logger.warning("curl-cffi not installed — CF bypass fetch path disabled")
+
+try:
     from playwright.sync_api import sync_playwright
     HAS_PLAYWRIGHT = True
 except ImportError:
@@ -20,6 +27,9 @@ class FetchResult:
     screenshot_b64: str | None
     method: str  # "http" | "playwright_text" | "playwright_screenshot"
 
+
+# Sites protected by Cloudflare Bot Management — use curl-cffi TLS impersonation
+CF_DETAIL_SITES: set[str] = {"pararius"}
 
 PLAYWRIGHT_DETAIL_SITES: set[str] = set()
 
@@ -66,6 +76,17 @@ def _extract_content(soup: BeautifulSoup) -> str:
     return soup.get_text(separator="\n", strip=True)
 
 
+def _fetch_cf(url: str) -> FetchResult:
+    """curl-cffi GET with Chrome TLS fingerprint — bypasses Cloudflare Bot Management."""
+    if not HAS_CURL_CFFI:
+        raise RuntimeError("curl-cffi not available")
+    r = cf_requests.get(url, impersonate="chrome124", timeout=20)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+    text = _extract_content(soup)
+    return FetchResult(text=text, screenshot_b64=None, method="cf_get")
+
+
 def _fetch_http(url: str) -> FetchResult:
     """Plain HTTP GET + BeautifulSoup extraction."""
     resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=15)
@@ -103,7 +124,17 @@ def _fetch_playwright(url: str) -> FetchResult:
 
 
 def fetch_detail_page(url: str, agency: str) -> FetchResult:
-    """Tiered fetch: HTTP first, Playwright fallback if content is thin."""
+    """Tiered fetch: CF bypass for Cloudflare sites, plain HTTP, Playwright fallback."""
+    if agency in CF_DETAIL_SITES:
+        logger.debug("fetch_detail_page: agency '%s' → CF bypass for %s", agency, url)
+        try:
+            result = _fetch_cf(url)
+            if result.text and len(result.text) >= _MIN_CONTENT_LENGTH:
+                return result
+        except Exception as e:
+            logger.info("fetch_detail_page: CF fetch failed for %s: %r — falling back to Playwright", url, e)
+        return _fetch_playwright(url)
+
     if agency in PLAYWRIGHT_DETAIL_SITES:
         logger.debug("fetch_detail_page: agency '%s' → direct Playwright for %s", agency, url)
         return _fetch_playwright(url)
