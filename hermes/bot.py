@@ -4,7 +4,7 @@ import functools
 import telegram
 from time import sleep
 from telegram.error import Forbidden
-from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, CallbackQueryHandler, ConversationHandler, ContextTypes
 
 import hermes_utils.db as db
 import hermes_utils.meta as meta
@@ -514,47 +514,297 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
             await query.message.reply_text("Something went wrong generating the letter. Please try again.")
 
 
+# ─── Profile wizard ──────────────────────────────────────────────────────────
+# States for ConversationHandler
+(P_NAME, P_NATIONALITY, P_EMPLOYER, P_CONTRACT,
+ P_INCOME, P_MAX_RENT, P_CITIES, P_OCCUPANTS,
+ P_PETS, P_MOVE_IN, P_NOTES) = range(11)
+
+
+async def _profile_cancel(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat: return ConversationHandler.END
+    context.user_data.pop("profile", None)
+    await context.bot.send_message(update.effective_chat.id, "Profile setup cancelled.")
+    return ConversationHandler.END
+
+
+# ── Step helpers ──────────────────────────────────────────────────────────────
+
+async def _ask_nationality(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "What's your nationality? (e.g. Dutch, British)\n/skip to skip"
+    )
+    return P_NATIONALITY
+
+
+async def _ask_employer(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "Where do you work? (employer name)\n/skip to skip"
+    )
+    return P_EMPLOYER
+
+
+async def _ask_contract(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    keyboard = [
+        [telegram.InlineKeyboardButton("Permanent", callback_data="pwiz_contract:permanent"),
+         telegram.InlineKeyboardButton("Temporary", callback_data="pwiz_contract:temporary")],
+        [telegram.InlineKeyboardButton("Freelance / ZZP", callback_data="pwiz_contract:freelance"),
+         telegram.InlineKeyboardButton("Student", callback_data="pwiz_contract:student")],
+        [telegram.InlineKeyboardButton("Skip", callback_data="pwiz_contract:skip")],
+    ]
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "What type of employment contract do you have?",
+        reply_markup=telegram.InlineKeyboardMarkup(keyboard),
+    )
+    return P_CONTRACT
+
+
+async def _ask_income(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "What's your gross monthly income? (EUR, e.g. 4500)\n/skip to skip"
+    )
+    return P_INCOME
+
+
+async def _ask_max_rent(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "What's your maximum rent? (EUR/month, e.g. 1800)"
+    )
+    return P_MAX_RENT
+
+
+async def _ask_cities(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    existing = db.fetch_one(
+        "SELECT filter_cities FROM hermes.subscribers WHERE telegram_id = %s",
+        [str(update.effective_chat.id)]
+    )
+    hint = ""
+    if existing and existing.get("filter_cities"):
+        hint = f"\n\nYour current city filter: {', '.join(c.title() for c in existing['filter_cities'])}"
+    await context.bot.send_message(
+        update.effective_chat.id,
+        f"Which cities are you looking in? (comma-separated, e.g. Amsterdam, Almere){hint}"
+    )
+    return P_CITIES
+
+
+async def _ask_occupants(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    keyboard = [
+        [telegram.InlineKeyboardButton("Just me", callback_data="pwiz_occupants:single"),
+         telegram.InlineKeyboardButton("Couple", callback_data="pwiz_occupants:couple")],
+        [telegram.InlineKeyboardButton("With roommates", callback_data="pwiz_occupants:roommates"),
+         telegram.InlineKeyboardButton("Family", callback_data="pwiz_occupants:family")],
+    ]
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "Who will live there?",
+        reply_markup=telegram.InlineKeyboardMarkup(keyboard),
+    )
+    return P_OCCUPANTS
+
+
+async def _ask_pets(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "Do you have any pets?\n/skip to skip"
+    )
+    return P_PETS
+
+
+async def _ask_move_in(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "When do you want to move in? (e.g. May 2026, ASAP)\n/skip to skip"
+    )
+    return P_MOVE_IN
+
+
+async def _ask_notes(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await context.bot.send_message(
+        update.effective_chat.id,
+        "Anything else the AI should know? (e.g. quiet professional, references available)\n/skip to finish"
+    )
+    return P_NOTES
+
+
+async def _profile_save(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    from enrichment.profile import upsert_profile
+    chat_id = update.effective_chat.id
+    data = context.user_data.pop("profile", {})
+    try:
+        upsert_profile(str(chat_id), data)
+        name = data.get("full_name", "?")
+        max_rent = data.get("max_rent", "?")
+        cities = ", ".join(c.title() for c in (data.get("target_cities") or []))
+        employer = data.get("employer", "—")
+        await context.bot.send_message(
+            chat_id,
+            f"✅ Profile saved!\n\n"
+            f"Name: {name}\n"
+            f"Employer: {employer}\n"
+            f"Max rent: €{max_rent}/month\n"
+            f"Cities: {cities}\n\n"
+            "The AI will use this to score listings and write motivation letters.\n"
+            "Use /profile to review, or /profile edit <field> <value> to change individual fields."
+        )
+    except Exception as e:
+        logger.error("Profile save failed: %r", e)
+        await context.bot.send_message(chat_id, "Something went wrong saving your profile. Please try again with /profile setup.")
+    return ConversationHandler.END
+
+
+# ── Step handlers ─────────────────────────────────────────────────────────────
+
+async def _p_name(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_NAME
+    context.user_data["profile"]["full_name"] = update.message.text.strip()
+    return await _ask_nationality(update, context)
+
+
+async def _p_nationality(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_NATIONALITY
+    context.user_data["profile"]["nationality"] = update.message.text.strip()
+    return await _ask_employer(update, context)
+
+async def _p_skip_nationality(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat: return ConversationHandler.END
+    return await _ask_employer(update, context)
+
+
+async def _p_employer(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_EMPLOYER
+    context.user_data["profile"]["employer"] = update.message.text.strip()
+    return await _ask_contract(update, context)
+
+async def _p_skip_employer(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat: return ConversationHandler.END
+    return await _ask_contract(update, context)
+
+
+async def _p_contract(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    if not query or not update.effective_chat: return P_CONTRACT
+    await query.answer()
+    value = query.data.split(":")[1]
+    if value != "skip":
+        context.user_data["profile"]["contract_type"] = value
+    await query.edit_message_reply_markup(None)
+    return await _ask_income(update, context)
+
+
+async def _p_income(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_INCOME
+    try:
+        context.user_data["profile"]["gross_monthly_income"] = int(update.message.text.strip().replace(",", "").replace(".", ""))
+    except ValueError:
+        await context.bot.send_message(update.effective_chat.id, "Please enter a number (e.g. 4500)\n/skip to skip")
+        return P_INCOME
+    return await _ask_max_rent(update, context)
+
+async def _p_skip_income(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat: return ConversationHandler.END
+    return await _ask_max_rent(update, context)
+
+
+async def _p_max_rent(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_MAX_RENT
+    try:
+        context.user_data["profile"]["max_rent"] = int(update.message.text.strip().replace(",", "").replace(".", ""))
+    except ValueError:
+        await context.bot.send_message(update.effective_chat.id, "Please enter a number (e.g. 1800)")
+        return P_MAX_RENT
+    return await _ask_cities(update, context)
+
+
+async def _p_cities(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_CITIES
+    cities = [c.strip().lower() for c in update.message.text.split(",") if c.strip()]
+    if not cities:
+        await context.bot.send_message(update.effective_chat.id, "Please enter at least one city.")
+        return P_CITIES
+    context.user_data["profile"]["target_cities"] = cities
+    return await _ask_occupants(update, context)
+
+
+async def _p_occupants(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    if not query or not update.effective_chat: return P_OCCUPANTS
+    await query.answer()
+    context.user_data["profile"]["occupants"] = query.data.split(":")[1]
+    await query.edit_message_reply_markup(None)
+    return await _ask_pets(update, context)
+
+
+async def _p_pets(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_PETS
+    context.user_data["profile"]["pets"] = update.message.text.strip()
+    return await _ask_move_in(update, context)
+
+async def _p_skip_pets(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat: return ConversationHandler.END
+    return await _ask_move_in(update, context)
+
+
+async def _p_move_in(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_MOVE_IN
+    context.user_data["profile"]["move_in_date"] = update.message.text.strip()
+    return await _ask_notes(update, context)
+
+async def _p_skip_move_in(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat: return ConversationHandler.END
+    return await _ask_notes(update, context)
+
+
+async def _p_notes(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text: return P_NOTES
+    context.user_data["profile"]["extra_notes"] = update.message.text.strip()
+    return await _profile_save(update, context)
+
+async def _p_skip_notes(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat: return ConversationHandler.END
+    return await _profile_save(update, context)
+
+
+# ── /profile command (entry point + view + edit) ──────────────────────────────
+
 @requires_approval
-async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.effective_chat or not update.message or not update.message.text: return
+async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not update.effective_chat or not update.message or not update.message.text:
+        return ConversationHandler.END
 
     try:
         from enrichment.profile import get_profile_for_telegram_id, upsert_profile
     except ImportError:
         await context.bot.send_message(update.effective_chat.id, "Enrichment module not available.")
-        return
+        return ConversationHandler.END
 
-    text = update.message.text.strip()
-    parts = text.split(maxsplit=2)
+    parts = update.message.text.strip().split(maxsplit=2)
 
-    if len(parts) == 1:
-        profile = get_profile_for_telegram_id(str(update.effective_chat.id))
-        if not profile:
-            await context.bot.send_message(
-                update.effective_chat.id,
-                "No profile set. Use /profile edit <field> <value> to set fields.\n\n"
-                "Required: full_name, max_rent, target_cities",
-            )
-            return
-        msg = "Your profile:\n\n"
-        for key in [
-            "full_name", "age", "nationality", "employer", "contract_type",
-            "gross_monthly_income", "work_address", "max_rent", "target_cities",
-            "furnishing_pref", "occupants", "pets", "move_in_date",
-        ]:
-            val = profile.get(key)
-            if val is not None:
-                msg += f"{key}: {val}\n"
-        await context.bot.send_message(update.effective_chat.id, msg)
+    # /profile setup → start wizard
+    if len(parts) >= 2 and parts[1] == "setup":
+        context.user_data["profile"] = {}
+        await context.bot.send_message(
+            update.effective_chat.id,
+            "Let's set up your profile for AI-powered listing analysis.\n\n"
+            "This helps score listings and write tailored motivation letters.\n"
+            "Send /cancel at any time to stop.\n\n"
+            "What's your full name?"
+        )
+        return P_NAME
 
-    elif len(parts) >= 3 and parts[1] == "edit":
-        field_and_value = text.split(maxsplit=3)
-        if len(field_and_value) < 4:
+    # /profile edit <field> <value>
+    if len(parts) >= 2 and parts[1] == "edit":
+        text = update.message.text.strip()
+        tokens = text.split(maxsplit=3)
+        if len(tokens) < 4:
             await context.bot.send_message(update.effective_chat.id, "Usage: /profile edit <field> <value>")
-            return
-        field = field_and_value[2]
-        value = field_and_value[3]
-
+            return ConversationHandler.END
+        field, value = tokens[2], tokens[3]
         allowed = {
             "full_name", "age", "nationality", "languages", "bsn_held", "gemeente",
             "employer", "contract_type", "gross_monthly_income", "employment_duration",
@@ -566,29 +816,48 @@ async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYP
                 update.effective_chat.id,
                 f"Unknown field: {field}\nAllowed: {', '.join(sorted(allowed))}",
             )
-            return
-
+            return ConversationHandler.END
         if field in ("age", "gross_monthly_income", "max_rent"):
             try:
                 value = int(value)
             except ValueError:
                 await context.bot.send_message(update.effective_chat.id, f"{field} must be a number")
-                return
+                return ConversationHandler.END
         elif field == "target_cities":
-            value = [c.strip() for c in value.split(",")]
+            value = [c.strip().lower() for c in value.split(",")]
         elif field == "languages":
             value = [lang.strip() for lang in value.split(",")]
         elif field == "bsn_held":
             value = value.lower() in ("true", "yes", "1")
-
         upsert_profile(str(update.effective_chat.id), {field: value})
-        await context.bot.send_message(update.effective_chat.id, f"Updated {field}")
+        await context.bot.send_message(update.effective_chat.id, f"✅ Updated {field}")
+        return ConversationHandler.END
 
-    else:
+    # /profile → view
+    profile = get_profile_for_telegram_id(str(update.effective_chat.id))
+    if not profile:
         await context.bot.send_message(
             update.effective_chat.id,
-            "Usage:\n/profile \u2014 view\n/profile edit <field> <value>",
+            "No profile set up yet.\n\nUse /profile setup to get started — it takes about 2 minutes and lets the AI score listings and write motivation letters tailored to you."
         )
+        return ConversationHandler.END
+
+    labels = [
+        ("full_name", "Name"), ("nationality", "Nationality"), ("employer", "Employer"),
+        ("contract_type", "Contract"), ("gross_monthly_income", "Income (EUR/mo)"),
+        ("max_rent", "Max rent"), ("target_cities", "Cities"), ("occupants", "Occupants"),
+        ("pets", "Pets"), ("move_in_date", "Move-in"), ("extra_notes", "Notes"),
+    ]
+    msg = "Your profile:\n\n"
+    for key, label in labels:
+        val = profile.get(key)
+        if val is not None:
+            if isinstance(val, list):
+                val = ", ".join(str(v) for v in val)
+            msg += f"{label}: {val}\n"
+    msg += "\nUse /profile setup to update, or /profile edit <field> <value> for a single field."
+    await context.bot.send_message(update.effective_chat.id, msg)
+    return ConversationHandler.END
 
 
 @requires_approval
@@ -678,7 +947,30 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("nodev", disable_dev))
     application.add_handler(CommandHandler("setdonate", set_donation_link))
     application.add_handler(CommandHandler("link", link))
-    application.add_handler(CommandHandler("profile", profile_cmd))
+    application.add_handler(ConversationHandler(
+        entry_points=[CommandHandler("profile", profile_cmd)],
+        states={
+            P_NAME:       [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_name)],
+            P_NATIONALITY:[MessageHandler(filters.TEXT & ~filters.COMMAND, _p_nationality),
+                           CommandHandler("skip", _p_skip_nationality)],
+            P_EMPLOYER:   [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_employer),
+                           CommandHandler("skip", _p_skip_employer)],
+            P_CONTRACT:   [CallbackQueryHandler(_p_contract, pattern="^pwiz_contract:")],
+            P_INCOME:     [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_income),
+                           CommandHandler("skip", _p_skip_income)],
+            P_MAX_RENT:   [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_max_rent)],
+            P_CITIES:     [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_cities)],
+            P_OCCUPANTS:  [CallbackQueryHandler(_p_occupants, pattern="^pwiz_occupants:")],
+            P_PETS:       [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_pets),
+                           CommandHandler("skip", _p_skip_pets)],
+            P_MOVE_IN:    [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_move_in),
+                           CommandHandler("skip", _p_skip_move_in)],
+            P_NOTES:      [MessageHandler(filters.TEXT & ~filters.COMMAND, _p_notes),
+                           CommandHandler("skip", _p_skip_notes)],
+        },
+        fallbacks=[CommandHandler("cancel", _profile_cancel)],
+        allow_reentry=True,
+    ))
     application.add_handler(CommandHandler("cost", cost_cmd))
     application.add_handler(CommandHandler("help", help))
     application.add_handler(CommandHandler("faq", faq))

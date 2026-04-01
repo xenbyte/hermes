@@ -306,6 +306,7 @@ Succes met je zoektocht\!"""
 
 /filter - Show and modify your personal filters
 /websites - Show info about the websites Hermes checks
+/profile - Set up your AI enrichment profile (scoring + motivation letters)
 /donate - Get an open Tikkie link to show your appreciation for Hermes
 /link - Link your website account to Telegram
 
@@ -320,6 +321,7 @@ Succes met je zoektocht\!"""
 
 /filter - Bekijk en wijzig je persoonlijke filters
 /websites - Bekijk welke websites Hermes checkt
+/profile - Stel je AI-profiel in (woningscores + motivatiebrieven)
 /donate - Ontvang een open Tikkie link en waardeer Hermes met een biertje voor de maker
 /link - Koppel je website-account aan Telegram
 
