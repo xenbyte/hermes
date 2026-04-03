@@ -1077,7 +1077,10 @@ async def analyse_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYP
     url = (context.args or [""])[0].strip()
     if not url.startswith(("http://", "https://")):
         await update.message.reply_text(
-            "Usage: `/analyse <url>`\n\nPaste a direct link to any rental listing\\.",
+            "📎 *Paste a listing URL to analyse it*\n\n"
+            "Example:\n"
+            "`/analyse https://www.pararius.com/apartment-for-rent/amsterdam/...`\n\n"
+            "Works with Pararius, Funda, and other supported sites\\.",
             parse_mode="MarkdownV2",
         )
         return
@@ -1258,7 +1261,9 @@ async def help(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
             "/announce — Broadcast to all subscribers\n"
             "/status — System status\n"
             "/halt /resume — Pause or resume the scraper\n"
-            "/setdonate — Update donation link"
+            "/setdonate — Update donation link\n"
+            "/dev — Dev mode: /announce only reaches admins \\(safe to test broadcasts\\)\n"
+            "/nodev — Turn off dev mode, broadcasts go to everyone again"
         )
 
     await context.bot.send_message(update.effective_chat.id, message, parse_mode="MarkdownV2")
