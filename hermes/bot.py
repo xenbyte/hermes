@@ -541,7 +541,7 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
             if action == "u":
                 new_limit = -1
             elif action == "r":
-                new_limit = _ADMIN_DEFAULT_LIMIT
+                new_limit = db.get_default_analysis_limit()
             elif action == "+1":
                 new_limit = (current + 1) if current != -1 else -1
             elif action == "-1":
@@ -550,6 +550,15 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
                 new_limit = current
             db.set_analysis_limit(int(tid), new_limit)
             text, kb = _admin_user_detail(tid)
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=kb)
+
+        elif parts[1] == "defaults":
+            text, kb = _admin_defaults_page()
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=kb)
+
+        elif parts[1] == "sd":
+            db.set_default_analysis_limit(int(parts[2]))
+            text, kb = _admin_defaults_page()
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=kb)
 
     # Letter generation callbacks (colon-separated)
@@ -933,22 +942,54 @@ async def profile_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYP
         )
         return ConversationHandler.END
 
-    labels = [
-        ("full_name", "Name"), ("nationality", "Nationality"), ("employer", "Employer"),
-        ("work_address", "Work address"), ("contract_type", "Contract"),
-        ("gross_monthly_income", "Income (EUR/mo)"),
-        ("max_rent", "Max rent"), ("target_cities", "Cities"), ("occupants", "Occupants"),
-        ("pets", "Pets"), ("move_in_date", "Move-in"), ("extra_notes", "Notes"),
+    def _fmt(val) -> str:
+        if val is None or val == "" or val == []:
+            return "❌ not set"
+        if isinstance(val, list):
+            return ", ".join(str(v) for v in val)
+        if isinstance(val, bool):
+            return "Yes" if val else "No"
+        return str(val)
+
+    sections = [
+        ("👤 Personal", [
+            ("full_name",   "Name"),
+            ("age",         "Age"),
+            ("nationality", "Nationality"),
+            ("languages",   "Languages"),
+            ("bsn_held",    "BSN held"),
+            ("gemeente",    "Gemeente"),
+        ]),
+        ("💼 Employment", [
+            ("employer",             "Employer"),
+            ("contract_type",        "Contract"),
+            ("gross_monthly_income", "Income (€/mo)"),
+            ("employment_duration",  "Duration"),
+            ("work_address",         "Work address"),
+        ]),
+        ("🏠 Housing", [
+            ("max_rent",       "Max rent"),
+            ("target_cities",  "Cities"),
+            ("furnishing_pref","Furnishing"),
+            ("occupants",      "Occupants"),
+            ("pets",           "Pets"),
+            ("owned_items",    "Owned items"),
+            ("move_in_date",   "Move-in date"),
+        ]),
+        ("📝 Notes", [
+            ("extra_notes", "Notes"),
+        ]),
     ]
-    msg = "Your profile:\n\n"
-    for key, label in labels:
-        val = profile.get(key)
-        if val is not None:
-            if isinstance(val, list):
-                val = ", ".join(str(v) for v in val)
-            msg += f"{label}: {val}\n"
-    msg += "\nUse /profile setup to update, or /profile edit <field> <value> for a single field."
-    await context.bot.send_message(update.effective_chat.id, msg)
+
+    msg = "*Your profile*\n"
+    for section_title, fields in sections:
+        msg += f"\n{section_title}\n"
+        for key, label in fields:
+            val = _fmt(profile.get(key))
+            msg += f"  {label}: {val}\n"
+
+    msg += "\n_Use /profile setup to redo, or /profile edit <field> <value> for one field._"
+    await context.bot.send_message(update.effective_chat.id, msg, parse_mode="Markdown")
     return ConversationHandler.END
 
 
@@ -1003,7 +1044,6 @@ async def link(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, code
 # ─── Admin panel ──────────────────────────────────────────────────────────────
 
 _ADMIN_PAGE_SIZE = 8
-_ADMIN_DEFAULT_LIMIT = 3
 
 
 def _admin_is_admin(telegram_id: int) -> bool:
@@ -1016,11 +1056,13 @@ def _admin_is_admin(telegram_id: int) -> bool:
 
 def _admin_users_page(page: int) -> tuple[str, telegram.InlineKeyboardMarkup]:
     users = db.get_all_subscribers_with_usage()
+    global_default = db.get_default_analysis_limit()
     total = len(users)
     start = page * _ADMIN_PAGE_SIZE
     chunk = users[start:start + _ADMIN_PAGE_SIZE]
 
-    lines = [f"*Users* ({total} total)\n"]
+    default_str = "∞" if global_default == -1 else str(global_default)
+    lines = [f"*Users* ({total} total) · default: {default_str}/day\n"]
     buttons = []
     for u in chunk:
         tid = str(u["telegram_id"])
@@ -1038,8 +1080,30 @@ def _admin_users_page(page: int) -> tuple[str, telegram.InlineKeyboardMarkup]:
         nav.append(telegram.InlineKeyboardButton("Next ▶", callback_data=f"admin:p:{page + 1}"))
     if nav:
         buttons.append(nav)
+    buttons.append([telegram.InlineKeyboardButton("⚙️ Change global default", callback_data="admin:defaults")])
 
     return "\n".join(lines), telegram.InlineKeyboardMarkup(buttons)
+
+
+def _admin_defaults_page() -> tuple[str, telegram.InlineKeyboardMarkup]:
+    current = db.get_default_analysis_limit()
+    current_str = "Unlimited" if current == -1 else f"{current}/day"
+    text = (
+        f"*Global default AI limit*\n\n"
+        f"Current: *{current_str}*\n\n"
+        f"This applies to new users and the ↩ Reset button on user details."
+    )
+    buttons = [
+        [
+            telegram.InlineKeyboardButton("1/day", callback_data="admin:sd:1"),
+            telegram.InlineKeyboardButton("3/day", callback_data="admin:sd:3"),
+            telegram.InlineKeyboardButton("5/day", callback_data="admin:sd:5"),
+            telegram.InlineKeyboardButton("10/day", callback_data="admin:sd:10"),
+            telegram.InlineKeyboardButton("∞", callback_data="admin:sd:-1"),
+        ],
+        [telegram.InlineKeyboardButton("◀ Back", callback_data="admin:p:0")],
+    ]
+    return text, telegram.InlineKeyboardMarkup(buttons)
 
 
 def _admin_user_detail(tid: str) -> tuple[str, telegram.InlineKeyboardMarkup]:
@@ -1068,12 +1132,14 @@ def _admin_user_detail(tid: str) -> tuple[str, telegram.InlineKeyboardMarkup]:
         f"Used today: {today}\n"
         f"Joined: {str(sub['date_added'])[:10]}"
     )
+    global_default = db.get_default_analysis_limit()
+    reset_label = f"↩ Reset to {'∞' if global_default == -1 else global_default}"
     buttons = [
         [
             telegram.InlineKeyboardButton("➕ +1", callback_data=f"admin:l:{tid}:+1"),
             telegram.InlineKeyboardButton("➖ -1", callback_data=f"admin:l:{tid}:-1"),
             telegram.InlineKeyboardButton("∞ Unlimited", callback_data=f"admin:l:{tid}:u"),
-            telegram.InlineKeyboardButton("↩ Reset", callback_data=f"admin:l:{tid}:r"),
+            telegram.InlineKeyboardButton(reset_label, callback_data=f"admin:l:{tid}:r"),
         ],
         [telegram.InlineKeyboardButton("📊 History", callback_data=f"admin:h:{tid}")],
         [telegram.InlineKeyboardButton("◀ Back", callback_data="admin:p:0")],

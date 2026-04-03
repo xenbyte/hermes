@@ -150,6 +150,17 @@ def set_analysis_limit(telegram_id: int, limit: int) -> None:
     )
 
 
+def get_default_analysis_limit() -> int:
+    result = fetch_one("SELECT default_analysis_limit FROM hermes.meta WHERE id = 'default'")
+    if result and result.get("default_analysis_limit") is not None:
+        return int(result["default_analysis_limit"])
+    return 3
+
+
+def set_default_analysis_limit(limit: int) -> None:
+    _write("UPDATE hermes.meta SET default_analysis_limit = %s WHERE id = 'default'", [limit])
+
+
 def get_all_subscribers_with_usage() -> list:
     """All subscribers with today's and total analysis counts."""
     return fetch_all("""
