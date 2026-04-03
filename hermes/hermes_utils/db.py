@@ -143,6 +143,14 @@ def promote_user(telegram_id: int) -> None:
     )
 
 
+def update_user_identity(telegram_id: int, username: str | None, first_name: str | None) -> None:
+    """Keep Telegram username and first_name fresh on every interaction."""
+    _write(
+        "UPDATE hermes.subscribers SET tg_username = %s, tg_first_name = %s WHERE telegram_id = %s",
+        [username, first_name, str(telegram_id)],
+    )
+
+
 def set_analysis_limit(telegram_id: int, limit: int) -> None:
     _write(
         "UPDATE hermes.subscribers SET daily_analysis_limit = %s WHERE telegram_id = %s",
@@ -166,7 +174,7 @@ def get_all_subscribers_with_usage() -> list:
     return fetch_all("""
         SELECT
             s.telegram_id, s.user_level, s.daily_analysis_limit,
-            s.telegram_enabled, s.date_added,
+            s.telegram_enabled, s.date_added, s.tg_username, s.tg_first_name,
             COALESCE(today.cnt, 0) AS today_count,
             COALESCE(total.cnt, 0) AS total_count
         FROM hermes.subscribers s

@@ -70,6 +70,10 @@ def requires_approval(func):
                 strings.get("pending_approval", update.effective_chat.id)
             )
             return
+        # Keep username/first_name fresh on every interaction
+        user = update.effective_user
+        if user:
+            db.update_user_identity(update.effective_chat.id, user.username, user.first_name)
         return await func(update, context, *args, **kwargs)
     return wrapper
 
@@ -1070,8 +1074,9 @@ def _admin_users_page(page: int) -> tuple[str, telegram.InlineKeyboardMarkup]:
         limit_str = "∞" if limit == -1 else str(limit)
         today = u["today_count"]
         active = "✅" if u["telegram_enabled"] else "⏸"
-        lines.append(f"{active} `{tid}` · {today}/{limit_str} today")
-        buttons.append([telegram.InlineKeyboardButton(f"👤 {tid}", callback_data=f"admin:u:{tid}")])
+        identity = f"@{u['tg_username']}" if u.get("tg_username") else (u.get("tg_first_name") or tid)
+        lines.append(f"{active} {identity} · {today}/{limit_str} today")
+        buttons.append([telegram.InlineKeyboardButton(f"👤 {identity}", callback_data=f"admin:u:{tid}")])
 
     nav = []
     if page > 0:
@@ -1108,8 +1113,8 @@ def _admin_defaults_page() -> tuple[str, telegram.InlineKeyboardMarkup]:
 
 def _admin_user_detail(tid: str) -> tuple[str, telegram.InlineKeyboardMarkup]:
     sub = db.fetch_one(
-        "SELECT telegram_id, user_level, daily_analysis_limit, telegram_enabled, date_added "
-        "FROM hermes.subscribers WHERE telegram_id = %s",
+        "SELECT telegram_id, user_level, daily_analysis_limit, telegram_enabled, date_added, "
+        "tg_username, tg_first_name FROM hermes.subscribers WHERE telegram_id = %s",
         [tid],
     )
     if not sub:
@@ -1124,8 +1129,16 @@ def _admin_user_detail(tid: str) -> tuple[str, telegram.InlineKeyboardMarkup]:
     profile = db.fetch_one("SELECT id FROM hermes.user_profiles WHERE telegram_id = %s", [tid])
     today = db.get_daily_analysis_count(profile["id"]) if profile else 0
 
+    identity_parts = []
+    if sub.get("tg_username"):
+        identity_parts.append(f"@{sub['tg_username']}")
+    if sub.get("tg_first_name"):
+        identity_parts.append(sub["tg_first_name"])
+    identity_parts.append(f"`{tid}`")
+    identity = "  ·  ".join(identity_parts)
+
     text = (
-        f"*User {tid}*\n\n"
+        f"*User: {identity}*\n\n"
         f"Level: {level_str}\n"
         f"Status: {active_str}\n"
         f"AI limit: {limit_str}\n"
