@@ -25,6 +25,11 @@ spec:
                 secretKeyRef:
                   name: hermes-env
                   key: LOG_LEVEL
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-env
+                  key: ANTHROPIC_API_KEY
           volumeMounts:
             - name: secrets-py
               mountPath: /bot/hermes/hermes_utils/secrets.py

@@ -506,7 +506,14 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
             await loading_msg.edit_text(reply, parse_mode="MarkdownV2", disable_web_page_preview=True)
         except Exception as e:
             logger.error("on_demand analysis callback failed: %r", e)
-            await loading_msg.edit_text("Something went wrong running the analysis\\. Please try again\\.", parse_mode="MarkdownV2")
+            retry_kb = telegram.InlineKeyboardMarkup([[
+                telegram.InlineKeyboardButton("🔄 Try Again", callback_data=f"analyse:{url_hash}")
+            ]])
+            await loading_msg.edit_text(
+                "❌ Something went wrong running the analysis\\.",
+                parse_mode="MarkdownV2",
+                reply_markup=retry_kb,
+            )
 
     # Letter generation callbacks (colon-separated)
     elif query.data.startswith("letter_"):
