@@ -25,13 +25,7 @@ except ImportError:
 class FetchResult:
     text: str | None
     screenshot_b64: str | None
-    method: str  # "http" | "playwright_text" | "playwright_screenshot"
-
-
-# Sites protected by Cloudflare Bot Management — use curl-cffi TLS impersonation
-CF_DETAIL_SITES: set[str] = {"pararius"}
-
-PLAYWRIGHT_DETAIL_SITES: set[str] = set()
+    method: str  # "http" | "cf_get" | "playwright_text" | "playwright_screenshot"
 
 _MIN_CONTENT_LENGTH = 300
 
@@ -123,9 +117,12 @@ def _fetch_playwright(url: str) -> FetchResult:
         pw.stop()
 
 
-def fetch_detail_page(url: str, agency: str) -> FetchResult:
-    """Tiered fetch: CF bypass for Cloudflare sites, plain HTTP, Playwright fallback."""
-    if agency in CF_DETAIL_SITES:
+def fetch_detail_page(url: str, agency: str, method: str = "http") -> FetchResult:
+    """Tiered fetch routed by detail_fetch_method from the targets table.
+
+    method values: 'cf' | 'playwright' | 'http' (default)
+    """
+    if method == "cf":
         logger.debug("fetch_detail_page: agency '%s' → CF bypass for %s", agency, url)
         try:
             result = _fetch_cf(url)
@@ -135,10 +132,11 @@ def fetch_detail_page(url: str, agency: str) -> FetchResult:
             logger.info("fetch_detail_page: CF fetch failed for %s: %r — falling back to Playwright", url, e)
         return _fetch_playwright(url)
 
-    if agency in PLAYWRIGHT_DETAIL_SITES:
+    if method == "playwright":
         logger.debug("fetch_detail_page: agency '%s' → direct Playwright for %s", agency, url)
         return _fetch_playwright(url)
 
+    # Default: plain HTTP with Playwright fallback
     try:
         result = _fetch_http(url)
         if result.text and len(result.text) >= _MIN_CONTENT_LENGTH:

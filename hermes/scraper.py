@@ -200,9 +200,13 @@ async def broadcast(homes: list[Home]) -> None:
                 message = meta.escape_markdownv2(message)
                 message += f"🏢 [{meta.escape_markdownv2(agency_name)}]({home.url})"
 
-                keyboard = InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔍 Analyse this listing", callback_data=f"analyse:{url_hash}"),
-                ]])
+                agency_config = db.get_agency_detail_config(home.agency)
+                if agency_config["ai_analysis_enabled"]:
+                    keyboard = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔍 Analyse this listing", callback_data=f"analyse:{url_hash}"),
+                    ]])
+                else:
+                    keyboard = None
 
                 if sub.get("telegram_enabled") and sub.get("telegram_id"):
                     try:

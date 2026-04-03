@@ -237,9 +237,17 @@ def _run_core(home: dict, profile: dict, telegram_id: str) -> str:
     if not check_daily_budget():
         return "⚠️ Daily AI budget exceeded\\. Try again tomorrow\\."
 
-    # Fetch detail page
+    # Check if analysis is enabled for this agency
     agency = home.get("agency", "")
-    fetch_result = fetch_detail_page(url, agency)
+    agency_config = db.get_agency_detail_config(agency)
+    if not agency_config["ai_analysis_enabled"]:
+        return (
+            f"❌ AI analysis is not supported for *{_esc(agency)}* listings yet\\.\n"
+            "Only Pararius is currently supported\\."
+        )
+
+    # Fetch detail page
+    fetch_result = fetch_detail_page(url, agency, agency_config["detail_fetch_method"])
     if not fetch_result.text or len(fetch_result.text) < 50:
         return (
             "❌ Couldn't fetch the listing page \\(the site may block automated access\\)\\. "

@@ -2,6 +2,7 @@ import hashlib
 import psycopg2
 import logging
 import json
+import time
 from telegram import Chat
 from typing import Literal
 from datetime import datetime
@@ -291,6 +292,33 @@ def cleanup_error_rollups(retention_days: int = 30) -> None:
         "DELETE FROM hermes.error_rollups WHERE day < CURRENT_DATE - %s::int",
         [retention_days],
     )
+
+
+_AGENCY_CONFIG_CACHE: dict[str, tuple[dict, float]] = {}
+_AGENCY_CONFIG_TTL = 300  # seconds
+
+
+def get_agency_detail_config(agency: str) -> dict:
+    """Return {ai_analysis_enabled: bool, detail_fetch_method: str} for an agency.
+
+    Result is cached for 5 minutes to avoid per-request DB hits.
+    Falls back to disabled/http if the agency is not found in targets.
+    """
+    now = time.monotonic()
+    cached = _AGENCY_CONFIG_CACHE.get(agency)
+    if cached and now - cached[1] < _AGENCY_CONFIG_TTL:
+        return cached[0]
+
+    row = fetch_one(
+        "SELECT ai_analysis_enabled, detail_fetch_method FROM hermes.targets WHERE agency = %s LIMIT 1",
+        [agency],
+    )
+    config = {
+        "ai_analysis_enabled": bool(row.get("ai_analysis_enabled", False)),
+        "detail_fetch_method": row.get("detail_fetch_method", "http") or "http",
+    }
+    _AGENCY_CONFIG_CACHE[agency] = (config, now)
+    return config
 
 
 def get_enabled_targets_without_recent_homes(days: int = 7) -> list[RealDictRow]:
