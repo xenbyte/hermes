@@ -293,37 +293,94 @@ Succes met je zoektocht\!"""
         "nl": "Je account is verwijderd."
     },
 
+    "onboarding": {
+        "en": """🎉 *You're in!*
+
+Here's how to get the most out of Hermes:
+
+*Step 1 — Build your profile* /profile setup
+Takes 2 minutes. The AI uses it to score listings for your situation and write personalised motivation letters.
+
+*Step 2 — Set your filters* /filter
+Configure city, max price, and minimum size so you only get notified about matches.
+
+*Step 3 — Wait for listings*
+Hermes checks 20\+ Dutch rental sites every 5 minutes\. The moment something matches, you'll get a message\.
+
+*When a listing arrives:*
+Tap *🔍 Analyse* for an instant AI report — neighbourhood quality, commute estimate, income check, pros & cons, and a score out of 10\.
+
+You can also analyse any listing directly:
+/analyse https://pararius\.com/\.\.\.""",
+        "nl": """🎉 *Je bent erbij\!*
+
+Zo haal je het meeste uit Hermes:
+
+*Stap 1 — Bouw je profiel* /profile setup
+Duurt 2 minuten\. De AI gebruikt het om woningen te scoren en gepersonaliseerde motivatiebrieven te schrijven\.
+
+*Stap 2 — Stel je filters in* /filter
+Configureer stad, maximale prijs en minimale oppervlakte zodat je alleen meldingen krijgt voor matches\.
+
+*Stap 3 — Wacht op woningen*
+Hermes checkt elke 5 minuten 20\+ Nederlandse huurwebsites\. Zodra er een match is, krijg je een bericht\.
+
+*Als er een woning binnenkomt:*
+Tap *🔍 Analyseer* voor een direct AI\-rapport — buurtinformatie, reistijdschatting, inkomenscheck, voor\- en nadelen, en een score op 10\.
+
+Je kunt ook elke woning direct analyseren:
+/analyse https://pararius\.nl/\.\.\.""",
+    },
+
     "help": {
-        "en": """*I can do the following for you:*
-/register - Request access or reactivate your subscription
-/stop - Stop receiving updates
-/info - About Hermes and self-hosting
-/faq - Frequently asked questions
+        "en": """*Hermes — how to use*
 
-/filter - Show and modify your personal filters
-/websites - Show info about the websites Hermes checks
-/profile - Set up your AI enrichment profile (scoring + motivation letters)
-/donate - Support Hermes with a coffee on Ko-fi
-/link - Link your website account to Telegram
+*🚀 Getting started*
+/profile setup — AI profile for scoring & motivation letters
+/filter — Set city, price range and size filters
 
-/nl - Gebruik Hermes in het Nederlands
-/en - Use Hermes in English
-    """,
-    "nl": """*Dit kan ik voor je doen:*
-/register - Toegang aanvragen of abonnement heractiveren
-/stop - Stop het ontvangen van meldingen
-/info - Over Hermes en zelf hosten
-/faq - Veelgestelde vragen
+*🔍 Analysing listings*
+/analyse <url> — Analyse any rental listing directly
+Tap *🔍 Analyse* on any notification for an instant AI report
 
-/filter - Bekijk en wijzig je persoonlijke filters
-/websites - Bekijk welke websites Hermes checkt
-/profile - Stel je AI-profiel in (woningscores + motivatiebrieven)
-/donate - Steun Hermes met een koffie via Ko-fi
-/link - Koppel je website-account aan Telegram
+*⚙️ Your account*
+/profile — View your current profile
+/filter — View and update your filters
+/stop — Pause notifications
+/register — Resume notifications or sign up
 
-/nl - Gebruik Hermes in het Nederlands
-/en - Use Hermes in English
-"""
+*ℹ️ Info*
+/info — About Hermes and self\-hosting
+/faq — Frequently asked questions
+/websites — Sites Hermes monitors
+/donate — Support the project on Ko\-fi
+/link — Link your web dashboard account
+
+/nl — Gebruik Hermes in het Nederlands""",
+        "nl": """*Hermes — hoe te gebruiken*
+
+*🚀 Aan de slag*
+/profile setup — AI\-profiel voor scores en motivatiebrieven
+/filter — Stel stad, prijsrange en oppervlakte in
+
+*🔍 Woningen analyseren*
+/analyse <url> — Analyseer elke huurwoning direct
+Tap *🔍 Analyseer* op een melding voor een direct AI\-rapport
+
+*⚙️ Jouw account*
+/profile — Bekijk je huidige profiel
+/filter — Bekijk en wijzig je filters
+/stop — Meldingen pauzeren
+/register — Meldingen hervatten of aanmelden
+
+*ℹ️ Info*
+/info — Over Hermes en zelf hosten
+/faq — Veelgestelde vragen
+/websites — Sites die Hermes monitort
+/donate — Steun het project via Ko\-fi
+/link — Koppel je webdashboard\-account
+
+/en — Use Hermes in English"""
     }
 }
 

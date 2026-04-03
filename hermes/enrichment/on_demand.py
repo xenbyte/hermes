@@ -1,5 +1,6 @@
 """On-demand listing analysis triggered by the Telegram "Analyse" button."""
 
+import hashlib
 import json
 import logging
 import uuid
@@ -88,7 +89,8 @@ def _format_reply(home: dict, data: dict, commute_override: str | None) -> str:
 
     address = home.get("address", "")
     city = home.get("city", "")
-    lines.append(f"📊 *{_esc(address)}, {_esc(city)}*")
+    header = f"{_esc(address)}, {_esc(city)}" if address or city else _esc(home.get("url", ""))
+    lines.append(f"📊 *{header}*")
     lines.append(f"{_score_emoji(score)} Score: {score}/10")
     lines.append("")
 
@@ -205,26 +207,24 @@ def _save_analysis(
 # Main entry point (sync — call via asyncio.to_thread from the bot)
 # ---------------------------------------------------------------------------
 
-def run_on_demand_analysis(url_hash: str, telegram_id: str) -> str:
+def _run_core(home: dict, profile: dict, telegram_id: str) -> str:
     """
-    Fetch listing page, run Claude analysis, return a MarkdownV2-formatted reply.
-    Results are cached per (url_hash, profile_id). Safe to call multiple times.
+    Shared analysis core: fetch page → Claude → format → cache.
+    home must have at least 'url'. agency, address, city are optional.
     """
-    from enrichment.profile import get_profile_for_telegram_id, build_system_prompt
-
-    profile = get_profile_for_telegram_id(telegram_id)
-    if not profile:
-        return "❌ No profile found\\. Use /profile setup to create one first\\."
+    from enrichment.profile import build_system_prompt
 
     profile_id = profile["id"]
+    url = home["url"]
+    url_hash = home.get("url_hash") or hashlib.sha256(url.encode()).hexdigest()[:32]
 
-    # Return cached reply if available (cache hits never count against the limit)
+    # Cache hit — never counts against daily limit
     cached = get_cached_reply(url_hash, profile_id)
     if cached:
         logger.info("on_demand: cache hit url_hash=%s profile_id=%s", url_hash, profile_id)
         return cached
 
-    # Check daily analysis limit (only for fresh analyses)
+    # Daily limit check
     limit = db.get_analysis_limit(int(telegram_id))
     if limit != -1:
         used = db.get_daily_analysis_count(profile_id)
@@ -234,17 +234,10 @@ def run_on_demand_analysis(url_hash: str, telegram_id: str) -> str:
                 "Resets at midnight UTC\\."
             )
 
-    # Look up the home
-    home = db.fetch_one("SELECT * FROM hermes.homes WHERE url_hash = %s", [url_hash])
-    if not home:
-        return "❌ Listing not found in database\\."
-
-    url = home["url"]
-
     if not check_daily_budget():
         return "⚠️ Daily AI budget exceeded\\. Try again tomorrow\\."
 
-    # Fetch listing detail page
+    # Fetch detail page
     agency = home.get("agency", "")
     fetch_result = fetch_detail_page(url, agency)
     if not fetch_result.text or len(fetch_result.text) < 50:
@@ -253,16 +246,16 @@ def run_on_demand_analysis(url_hash: str, telegram_id: str) -> str:
             "Try opening the link directly\\."
         )
 
-    # Optional: Google Maps commute
+    # Optional Google Maps commute (only when we have a real address)
     commute_override: str | None = None
     work_address = profile.get("work_address")
-    if work_address:
-        home_address = f"{home.get('address', '')}, {home.get('city', '')}, Netherlands"
+    if work_address and home.get("address"):
+        home_address = f"{home['address']}, {home.get('city', '')}, Netherlands"
         times = get_commute_times(home_address, work_address)
         if times:
             commute_override = format_commute_times(times)
 
-    # Build and call Claude
+    # Claude call
     system_prompt = build_system_prompt(profile)
     user_prompt = _build_prompt(fetch_result.text, work_address)
 
@@ -278,16 +271,10 @@ def run_on_demand_analysis(url_hash: str, telegram_id: str) -> str:
         logger.error("on_demand: Claude API error: %r", e)
         return "❌ AI analysis failed\\. Please try again\\."
 
-    log_usage(
-        str(uuid.uuid4()),
-        ANALYSIS_MODEL,
-        response.usage.input_tokens,
-        response.usage.output_tokens,
-    )
+    log_usage(str(uuid.uuid4()), ANALYSIS_MODEL, response.usage.input_tokens, response.usage.output_tokens)
 
     response_text = response.content[0].text if response.content else ""
 
-    # Parse JSON response
     try:
         text = response_text.strip()
         if text.startswith("```"):
@@ -297,15 +284,60 @@ def run_on_demand_analysis(url_hash: str, telegram_id: str) -> str:
         data = json.loads(text.strip())
     except (json.JSONDecodeError, ValueError) as e:
         logger.error("on_demand: failed to parse Claude response: %r\n%.300s", e, response_text)
-        # Fallback: return raw text
         return f"📊 *Analysis*\n\n{_esc(response_text[:2000])}"
 
     reply_text = _format_reply(dict(home), data, commute_override)
-
     _save_analysis(url_hash, profile_id, url, data.get("listing", {}), data, reply_text)
 
     logger.info(
-        "on_demand: analysis complete url_hash=%s profile_id=%s score=%s method=%s",
+        "on_demand: done url_hash=%s profile_id=%s score=%s method=%s",
         url_hash, profile_id, data.get("score"), fetch_result.method,
     )
     return reply_text
+
+
+def run_on_demand_analysis(url_hash: str, telegram_id: str) -> str:
+    """Entry point for the Analyse button callback (url_hash already known)."""
+    from enrichment.profile import get_profile_for_telegram_id
+
+    profile = get_profile_for_telegram_id(telegram_id)
+    if not profile:
+        return "❌ No profile found\\. Use /profile setup to create one first\\."
+
+    home = db.fetch_one("SELECT * FROM hermes.homes WHERE url_hash = %s", [url_hash])
+    if not home:
+        return "❌ Listing not found in database\\."
+
+    return _run_core(dict(home), profile, telegram_id)
+
+
+def run_on_demand_analysis_by_url(url: str, telegram_id: str) -> str:
+    """Entry point for the /analyse <url> command."""
+    from enrichment.profile import get_profile_for_telegram_id
+    from urllib.parse import urlparse
+
+    profile = get_profile_for_telegram_id(telegram_id)
+    if not profile:
+        return "❌ No profile found\\. Use /profile setup to create one first\\."
+
+    # Prefer DB record so we have structured address/city/price data
+    home = db.fetch_one("SELECT * FROM hermes.homes WHERE url = %s", [url])
+    if not home:
+        url_hash = hashlib.sha256(url.encode()).hexdigest()[:32]
+        home = db.fetch_one("SELECT * FROM hermes.homes WHERE url_hash = %s", [url_hash])
+
+    if not home:
+        # Not scraped yet — build a minimal record from the URL
+        domain = urlparse(url).netloc.lower().removeprefix("www.")
+        agency = domain.split(".")[0]
+        home = {
+            "url": url,
+            "url_hash": hashlib.sha256(url.encode()).hexdigest()[:32],
+            "agency": agency,
+            "address": "",
+            "city": "",
+            "price": 0,
+            "sqm": 0,
+        }
+
+    return _run_core(dict(home), profile, telegram_id)

@@ -1,4 +1,5 @@
 import re
+import asyncio
 import logging
 import functools
 import telegram
@@ -100,7 +101,11 @@ async def register(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) 
         name = await get_sub_name(update, context)
         logger.info("New subscriber: %s (chat_id=%s)", name, update.effective_chat.id)
         db.add_user(update.effective_chat.id)
-        await context.bot.send_message(update.effective_chat.id, strings.get("start", update.effective_chat.id), parse_mode="MarkdownV2")
+        await context.bot.send_message(
+            update.effective_chat.id,
+            strings.get("onboarding", update.effective_chat.id),
+            parse_mode="MarkdownV2",
+        )
     elif checksub["telegram_enabled"]:
         await context.bot.send_message(update.effective_chat.id, strings.get("register_already", update.effective_chat.id))
     else:
@@ -502,12 +507,12 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
         )
 
         try:
-            import asyncio
             from enrichment.on_demand import run_on_demand_analysis
             reply = await asyncio.to_thread(
                 run_on_demand_analysis, url_hash, str(query.message.chat.id)
             )
-            await loading_msg.edit_text(reply, parse_mode="MarkdownV2", disable_web_page_preview=True)
+            footer = _quota_footer(str(query.message.chat.id))
+            await loading_msg.edit_text(reply + footer, parse_mode="MarkdownV2", disable_web_page_preview=True)
         except Exception as e:
             logger.error("on_demand analysis callback failed: %r", e)
             retry_kb = telegram.InlineKeyboardMarkup([[
@@ -1045,6 +1050,62 @@ async def link(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, code
         await context.bot.send_message(update.effective_chat.id, strings.get("link_invalid_code", update.effective_chat.id))
 
 
+# ─── Quota footer ─────────────────────────────────────────────────────────────
+
+def _quota_footer(telegram_id: str) -> str:
+    """Returns a MarkdownV2 footer showing remaining daily analyses. Empty for unlimited users."""
+    limit = db.get_analysis_limit(int(telegram_id))
+    if limit == -1:
+        return ""
+    profile = db.fetch_one("SELECT id FROM hermes.user_profiles WHERE telegram_id = %s", [telegram_id])
+    if not profile:
+        return ""
+    used = db.get_daily_analysis_count(profile["id"])
+    remaining = max(0, limit - used)
+    if remaining == 0:
+        return "\n\n⚠️ _No analyses remaining today — resets at midnight UTC_"
+    return f"\n\n_📊 {remaining} of {limit} analyses remaining today_"
+
+
+# ─── /analyse <url> command ───────────────────────────────────────────────────
+
+@requires_approval
+async def analyse_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.message:
+        return
+
+    url = (context.args or [""])[0].strip()
+    if not url.startswith(("http://", "https://")):
+        await update.message.reply_text(
+            "Usage: `/analyse <url>`\n\nPaste a direct link to any rental listing\\.",
+            parse_mode="MarkdownV2",
+        )
+        return
+
+    loading_msg = await update.message.reply_text(
+        "⚡ *Analysis in progress*\n\n"
+        "🌐 Fetching listing details\n"
+        "🤖 Consulting the AI\n"
+        "📊 Building your report\n\n"
+        "_Hang tight — this takes about 15 seconds…_",
+        parse_mode="MarkdownV2",
+    )
+
+    try:
+        from enrichment.on_demand import run_on_demand_analysis_by_url
+        reply = await asyncio.to_thread(
+            run_on_demand_analysis_by_url, url, str(update.effective_chat.id)
+        )
+        footer = _quota_footer(str(update.effective_chat.id))
+        await loading_msg.edit_text(reply + footer, parse_mode="MarkdownV2", disable_web_page_preview=True)
+    except Exception as e:
+        logger.error("analyse_cmd failed: %r", e)
+        await loading_msg.edit_text(
+            "❌ Something went wrong running the analysis\\. Please try again\\.",
+            parse_mode="MarkdownV2",
+        )
+
+
 # ─── Admin panel ──────────────────────────────────────────────────────────────
 
 _ADMIN_PAGE_SIZE = 8
@@ -1189,20 +1250,18 @@ async def admin_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE)
 async def help(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or not update.message or not update.message.text: return
     message = strings.get("help", update.effective_chat.id)
-    
-    if privileged(update.effective_chat, update.message.text, "help", check_only=True):
-        message += "\n\n"
-        message += "*Admin commands:*\n"
-        message += "/announce - Broadcast a message to all subscribers\n"
-        message += "/status - Get system status\n"
-        message += "/halt - Halts the scraper\n"
-        message += "/resume - Resumes the scraper\n"
-        message += "/dev - Enables dev mode\n"
-        message += "/nodev - Disables dev mode\n"
-        message += "/setdonate - Sets the goodbye message donation link\n"
-        message += "/admin - User management panel (limits, history)"
 
-    await context.bot.send_message(update.effective_chat.id, message, parse_mode="Markdown")
+    if privileged(update.effective_chat, update.message.text, "help", check_only=True):
+        message += (
+            "\n\n*🔧 Admin*\n"
+            "/admin — User management panel\n"
+            "/announce — Broadcast to all subscribers\n"
+            "/status — System status\n"
+            "/halt /resume — Pause or resume the scraper\n"
+            "/setdonate — Update donation link"
+        )
+
+    await context.bot.send_message(update.effective_chat.id, message, parse_mode="MarkdownV2")
 
 
 if __name__ == '__main__':
@@ -1226,6 +1285,8 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("setdonate", set_donation_link))
     application.add_handler(CommandHandler("link", link))
     application.add_handler(CommandHandler("admin", admin_cmd))
+    application.add_handler(CommandHandler("analyse", analyse_cmd))
+    application.add_handler(CommandHandler("analyze", analyse_cmd))  # both spellings
     application.add_handler(ConversationHandler(
         entry_points=[CommandHandler("profile", profile_cmd)],
         states={
