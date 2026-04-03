@@ -132,7 +132,7 @@ def get_analysis_limit(telegram_id: int) -> int:
         "SELECT daily_analysis_limit FROM hermes.subscribers WHERE telegram_id = %s",
         [str(telegram_id)],
     )
-    return int(result.get("daily_analysis_limit", 5)) if result else 5
+    return int(result.get("daily_analysis_limit", 3)) if result else 3
 
 
 def promote_user(telegram_id: int) -> None:
@@ -141,6 +141,53 @@ def promote_user(telegram_id: int) -> None:
         "UPDATE hermes.subscribers SET daily_analysis_limit = -1 WHERE telegram_id = %s",
         [str(telegram_id)],
     )
+
+
+def set_analysis_limit(telegram_id: int, limit: int) -> None:
+    _write(
+        "UPDATE hermes.subscribers SET daily_analysis_limit = %s WHERE telegram_id = %s",
+        [limit, str(telegram_id)],
+    )
+
+
+def get_all_subscribers_with_usage() -> list:
+    """All subscribers with today's and total analysis counts."""
+    return fetch_all("""
+        SELECT
+            s.telegram_id, s.user_level, s.daily_analysis_limit,
+            s.telegram_enabled, s.date_added,
+            COALESCE(today.cnt, 0) AS today_count,
+            COALESCE(total.cnt, 0) AS total_count
+        FROM hermes.subscribers s
+        LEFT JOIN hermes.user_profiles up ON s.telegram_id::bigint = up.telegram_id::bigint
+        LEFT JOIN (
+            SELECT profile_id, COUNT(*) AS cnt
+            FROM hermes.listing_analysis
+            WHERE created_at >= CURRENT_DATE
+            GROUP BY profile_id
+        ) today ON today.profile_id = up.id
+        LEFT JOIN (
+            SELECT profile_id, COUNT(*) AS cnt
+            FROM hermes.listing_analysis
+            GROUP BY profile_id
+        ) total ON total.profile_id = up.id
+        ORDER BY s.date_added DESC
+    """)
+
+
+def get_user_analysis_history(telegram_id: int) -> list:
+    """Last 14 days of analysis run counts — no content, just dates and counts."""
+    return fetch_all("""
+        SELECT DATE(la.created_at) AS day, COUNT(*) AS count
+        FROM hermes.listing_analysis la
+        JOIN hermes.user_profiles up ON la.profile_id = up.id
+        WHERE up.telegram_id = %s
+        GROUP BY day
+        ORDER BY day DESC
+        LIMIT 14
+    """, [str(telegram_id)])
+
+
 def enable_user(telegram_id: int) -> None:
     _write("UPDATE hermes.subscribers SET telegram_enabled = true WHERE telegram_id = %s", [str(telegram_id)])
 def disable_user(telegram_id: int) -> None:

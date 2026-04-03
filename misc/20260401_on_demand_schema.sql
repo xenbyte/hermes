@@ -26,4 +26,5 @@ CREATE TABLE IF NOT EXISTS hermes.listing_analysis (
 CREATE INDEX IF NOT EXISTS idx_listing_analysis_profile ON hermes.listing_analysis (profile_id);
 
 -- Per-user daily AI analysis limit (-1 = unlimited)
-ALTER TABLE hermes.subscribers ADD COLUMN IF NOT EXISTS daily_analysis_limit INT NOT NULL DEFAULT 5;
+ALTER TABLE hermes.subscribers ADD COLUMN IF NOT EXISTS daily_analysis_limit INT NOT NULL DEFAULT 3;
+ALTER TABLE hermes.subscribers ALTER COLUMN daily_analysis_limit SET DEFAULT 3;

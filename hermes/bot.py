@@ -515,6 +515,43 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
                 reply_markup=retry_kb,
             )
 
+    # Admin panel callbacks
+    elif query.data.startswith("admin:"):
+        if not _admin_is_admin(query.message.chat.id):
+            await query.answer("Not authorized.", show_alert=True)
+            return
+        await query.answer()
+        parts = query.data.split(":")  # ["admin", action, ...]
+
+        if parts[1] == "p":
+            text, kb = _admin_users_page(int(parts[2]))
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=kb)
+
+        elif parts[1] == "u":
+            text, kb = _admin_user_detail(parts[2])
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=kb)
+
+        elif parts[1] == "h":
+            text, kb = _admin_history(parts[2])
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=kb)
+
+        elif parts[1] == "l":
+            tid, action = parts[2], parts[3]
+            current = db.get_analysis_limit(int(tid))
+            if action == "u":
+                new_limit = -1
+            elif action == "r":
+                new_limit = _ADMIN_DEFAULT_LIMIT
+            elif action == "+1":
+                new_limit = (current + 1) if current != -1 else -1
+            elif action == "-1":
+                new_limit = max(0, current - 1) if current != -1 else -1
+            else:
+                new_limit = current
+            db.set_analysis_limit(int(tid), new_limit)
+            text, kb = _admin_user_detail(tid)
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=kb)
+
     # Letter generation callbacks (colon-separated)
     elif query.data.startswith("letter_"):
         parts = query.data.split(":", 1)
@@ -963,6 +1000,112 @@ async def link(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, code
         await context.bot.send_message(update.effective_chat.id, strings.get("link_invalid_code", update.effective_chat.id))
 
 
+# ─── Admin panel ──────────────────────────────────────────────────────────────
+
+_ADMIN_PAGE_SIZE = 8
+_ADMIN_DEFAULT_LIMIT = 3
+
+
+def _admin_is_admin(telegram_id: int) -> bool:
+    sub = db.fetch_one(
+        "SELECT user_level FROM hermes.subscribers WHERE telegram_id = %s",
+        [str(telegram_id)],
+    )
+    return bool(sub and sub.get("user_level", 0) == 9)
+
+
+def _admin_users_page(page: int) -> tuple[str, telegram.InlineKeyboardMarkup]:
+    users = db.get_all_subscribers_with_usage()
+    total = len(users)
+    start = page * _ADMIN_PAGE_SIZE
+    chunk = users[start:start + _ADMIN_PAGE_SIZE]
+
+    lines = [f"*Users* ({total} total)\n"]
+    buttons = []
+    for u in chunk:
+        tid = str(u["telegram_id"])
+        limit = u["daily_analysis_limit"]
+        limit_str = "∞" if limit == -1 else str(limit)
+        today = u["today_count"]
+        active = "✅" if u["telegram_enabled"] else "⏸"
+        lines.append(f"{active} `{tid}` · {today}/{limit_str} today")
+        buttons.append([telegram.InlineKeyboardButton(f"👤 {tid}", callback_data=f"admin:u:{tid}")])
+
+    nav = []
+    if page > 0:
+        nav.append(telegram.InlineKeyboardButton("◀ Prev", callback_data=f"admin:p:{page - 1}"))
+    if start + _ADMIN_PAGE_SIZE < total:
+        nav.append(telegram.InlineKeyboardButton("Next ▶", callback_data=f"admin:p:{page + 1}"))
+    if nav:
+        buttons.append(nav)
+
+    return "\n".join(lines), telegram.InlineKeyboardMarkup(buttons)
+
+
+def _admin_user_detail(tid: str) -> tuple[str, telegram.InlineKeyboardMarkup]:
+    sub = db.fetch_one(
+        "SELECT telegram_id, user_level, daily_analysis_limit, telegram_enabled, date_added "
+        "FROM hermes.subscribers WHERE telegram_id = %s",
+        [tid],
+    )
+    if not sub:
+        return "User not found.", telegram.InlineKeyboardMarkup([[
+            telegram.InlineKeyboardButton("◀ Back", callback_data="admin:p:0")
+        ]])
+
+    limit = sub["daily_analysis_limit"]
+    limit_str = "Unlimited" if limit == -1 else f"{limit}/day"
+    level_str = "Admin" if sub["user_level"] == 9 else "User"
+    active_str = "Active" if sub["telegram_enabled"] else "Paused"
+    profile = db.fetch_one("SELECT id FROM hermes.user_profiles WHERE telegram_id = %s", [tid])
+    today = db.get_daily_analysis_count(profile["id"]) if profile else 0
+
+    text = (
+        f"*User {tid}*\n\n"
+        f"Level: {level_str}\n"
+        f"Status: {active_str}\n"
+        f"AI limit: {limit_str}\n"
+        f"Used today: {today}\n"
+        f"Joined: {str(sub['date_added'])[:10]}"
+    )
+    buttons = [
+        [
+            telegram.InlineKeyboardButton("➕ +1", callback_data=f"admin:l:{tid}:+1"),
+            telegram.InlineKeyboardButton("➖ -1", callback_data=f"admin:l:{tid}:-1"),
+            telegram.InlineKeyboardButton("∞ Unlimited", callback_data=f"admin:l:{tid}:u"),
+            telegram.InlineKeyboardButton("↩ Reset", callback_data=f"admin:l:{tid}:r"),
+        ],
+        [telegram.InlineKeyboardButton("📊 History", callback_data=f"admin:h:{tid}")],
+        [telegram.InlineKeyboardButton("◀ Back", callback_data="admin:p:0")],
+    ]
+    return text, telegram.InlineKeyboardMarkup(buttons)
+
+
+def _admin_history(tid: str) -> tuple[str, telegram.InlineKeyboardMarkup]:
+    rows = db.get_user_analysis_history(int(tid))
+    if not rows:
+        body = "_No analyses yet._"
+    else:
+        body = "\n".join(
+            f"`{str(r['day'])[:10]}` — {r['count']} run{'s' if r['count'] != 1 else ''}"
+            for r in rows
+        )
+    text = f"*Analysis history for {tid}*\n_(last 14 days, no content shown)_\n\n{body}"
+    kb = telegram.InlineKeyboardMarkup([[
+        telegram.InlineKeyboardButton("◀ Back", callback_data=f"admin:u:{tid}")
+    ]])
+    return text, kb
+
+
+async def admin_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.message:
+        return
+    if not _admin_is_admin(update.effective_chat.id):
+        return
+    text, kb = _admin_users_page(0)
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=kb)
+
+
 @requires_approval
 async def help(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or not update.message or not update.message.text: return
@@ -977,7 +1120,8 @@ async def help(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
         message += "/resume - Resumes the scraper\n"
         message += "/dev - Enables dev mode\n"
         message += "/nodev - Disables dev mode\n"
-        message += "/setdonate - Sets the goodbye message donation link"
+        message += "/setdonate - Sets the goodbye message donation link\n"
+        message += "/admin - User management panel (limits, history)"
 
     await context.bot.send_message(update.effective_chat.id, message, parse_mode="Markdown")
 
@@ -1002,6 +1146,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("nodev", disable_dev))
     application.add_handler(CommandHandler("setdonate", set_donation_link))
     application.add_handler(CommandHandler("link", link))
+    application.add_handler(CommandHandler("admin", admin_cmd))
     application.add_handler(ConversationHandler(
         entry_points=[CommandHandler("profile", profile_cmd)],
         states={
