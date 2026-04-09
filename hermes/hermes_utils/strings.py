@@ -30,7 +30,6 @@ Features:
 - Notifications within 5 minutes of a new listing
 - Filters for city, price range, minimum size, and agency
 - AI-powered listing analysis with scoring and motivation letters
-- Web dashboard for filter management
 - English and Dutch support
 
 Want to run your own instance? Hermes is open-source and free to self-host (BYOK — bring your own keys):
@@ -43,7 +42,6 @@ Functies:
 - Meldingen binnen 5 minuten na een nieuwe plaatsing
 - Filters voor stad, prijsbereik, minimale oppervlakte en makelaar
 - AI-analyse met scores en motivatiebrieven
-- Webdashboard voor filterbeheer
 - Ondersteuning voor Engels en Nederlands
 
 Wil je je eigen instantie draaien? Hermes is open-source en gratis te hosten (BYOK — bring your own keys):
@@ -58,8 +56,6 @@ I check real estate websites for new rental homes in The Netherlands\. For more 
 To see and modify your personal filters \(like city and maximum price\), say /filter\.
 
 You will receive a message when I find a new home that matches your filters\! If you want me to stop, just say /stop\.
-
-You can also use the website to manage your filters and see new listings come in live\!
 
 If you have any questions, please read the /faq\!
 
@@ -219,9 +215,6 @@ Succes met je zoektocht\!"""
 *I saw this listing on Pararius and I didn\'t get a message from Hermes\. Why?*
     Pararius does not list a house number for all homes, so Hermes can\'t check if it\'s already seen the listing on another website\. To avoid duplicates, we skip these listings altogether\.
 
-*Can I use Hermes without Telegram?*
-    Yes\! You can use the website with your linked account\.
-
 *Can I thank you for building and sharing Hermes for free?*
     Yes of course\! You can [buy me a coffee on Ko\-fi]({{}})\! {LOVE_EMOJI}
 
@@ -249,31 +242,11 @@ Succes met je zoektocht\!"""
 *Ik zag deze advertentie op Pararius maar heb geen bericht van Hermes ontvangen\. Waarom?*
     Pararius vermeldt niet voor alle woningen een huisnummer, dus Hermes kan niet controleren of de advertentie al op een andere website is gespot\. Om dubbele meldingen te voorkomen slaan we deze advertenties dus over\.
 
-*Kan ik Hermes zonder Telegram gebruiken?*
-    Ja\! Je kunt de website gebruiken met je gekoppelde account\.
-
 *Kan ik je bedanken voor het bouwen en delen van Hermes?*
     Jazeker\! Je kunt [een koffie kopen via Ko\-fi]({{}})\! {LOVE_EMOJI}
 
 *Kan ik contact met je opnemen?*
     Ja — zie [het project op GitHub](https://github.com/xenbyte/hermes) voor manieren om contact op te nemen\!"""
-    },
-
-    "link_success": {
-        "en": "Your account has been linked successfully! You can now modify your filters and view results on the website.",
-        "nl": "Je account is succesvol gekoppeld! Je kunt nu je filters aanpassen en woningen bekijken via de website."
-    },
-    "link_invalid_code": {
-        "en": "Invalid or expired code. Please request a new code on the website.",
-        "nl": "Ongeldige of verlopen code. Vraag een nieuwe code aan op de website."
-    },
-    "link_already_linked": {
-        "en": "Your Telegram account is already linked to an email address.",
-        "nl": "Je Telegram-account is al gekoppeld aan een e-mailadres."
-    },
-    "link_usage": {
-        "en": "Usage: /link <code>\n\nEnter the 4-character code from the website to link your account.",
-        "nl": "Gebruik: /link <code>\n\nVoer de 4-tekens code van de website in om je account te koppelen."
     },
 
     "pending_approval": {
@@ -354,7 +327,6 @@ Tap *🔍 Analyse* on any notification for an instant AI report
 /faq — Frequently asked questions
 /websites — Sites Hermes monitors
 /donate — Support the project on Ko\-fi
-/link — Link your web dashboard account
 
 /nl — Gebruik Hermes in het Nederlands""",
         "nl": """*Hermes — hoe te gebruiken*
@@ -378,7 +350,6 @@ Tap *🔍 Analyseer* op een melding voor een direct AI\-rapport
 /faq — Veelgestelde vragen
 /websites — Sites die Hermes monitort
 /donate — Steun het project via Ko\-fi
-/link — Koppel je webdashboard\-account
 
 /en — Use Hermes in English"""
     }

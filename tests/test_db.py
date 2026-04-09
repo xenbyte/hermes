@@ -199,25 +199,3 @@ class TestWriteActions:
         db.resume_scraper()
         mock_write.assert_called_once()
         assert "scraper_halted = false" in mock_write.call_args[0][0]
-
-
-class TestLinkAccount:
-    @patch('hermes_utils.db.get_connection')
-    def test_invalid_code(self, mock_get_conn):
-        mock_conn, mock_cursor = _mock_connection(fetchone_val=None)
-        mock_get_conn.return_value = mock_conn
-        result = db.link_account(12345, "XXXX")
-        assert result == "invalid_code"
-
-    @patch('hermes_utils.db.get_connection')
-    def test_already_linked(self, mock_get_conn):
-        mock_conn, mock_cursor = _mock_connection()
-        # First call: find the code -> return email
-        # Second call: check if telegram user has email -> yes
-        mock_cursor.fetchone.side_effect = [
-            {"email_address": "user@test.com"},  # code lookup
-            {"email_address": "existing@test.com"},  # already linked
-        ]
-        mock_get_conn.return_value = mock_conn
-        result = db.link_account(12345, "ABCD")
-        assert result == "already_linked"

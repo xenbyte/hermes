@@ -24,9 +24,6 @@ jobs:
           - service: hermes-scraper
             dockerfile: docker/Dockerfile.scraper
             context: .
-          - service: hermes-web
-            dockerfile: web/Dockerfile
-            context: web
 
     steps:
       - uses: actions/checkout@v4

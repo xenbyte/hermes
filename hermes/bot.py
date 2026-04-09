@@ -84,12 +84,6 @@ async def start(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.debug("/start from chat_id=%s", update.effective_chat.id)
     await context.bot.send_message(update.effective_chat.id, strings.get("welcome", update.effective_chat.id), disable_web_page_preview=True)
 
-    # Handle deep-link payload for web account linking (Telegram always uses /start for these)
-    payload = context.args[0] if context.args else None
-    if payload and payload.startswith("hermes-web-link-"):
-        checksub = db.fetch_one("SELECT * FROM hermes.subscribers WHERE telegram_id = %s", [str(update.effective_chat.id)])
-        if checksub and checksub.get("approved"):
-            await link(update, context, payload[16:])
 
 
 async def register(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1029,27 +1023,6 @@ async def cost_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) 
     await context.bot.send_message(update.effective_chat.id, msg)
 
 
-@requires_approval
-async def link(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE, code: str = "") -> None:
-    if not update.effective_chat or not update.message or not update.message.text: return
-
-    if not code:
-        parts = update.message.text.split()
-        if len(parts) < 2:
-            await context.bot.send_message(update.effective_chat.id, strings.get("link_usage", update.effective_chat.id))
-            return
-        code = parts[1].strip().upper()
-
-    result = db.link_account(update.effective_chat.id, code)
-
-    if result == "success":
-        await context.bot.send_message(update.effective_chat.id, strings.get("link_success", update.effective_chat.id))
-    elif result == "already_linked":
-        await context.bot.send_message(update.effective_chat.id, strings.get("link_already_linked", update.effective_chat.id))
-    else:
-        await context.bot.send_message(update.effective_chat.id, strings.get("link_invalid_code", update.effective_chat.id))
-
-
 # ─── Quota footer ─────────────────────────────────────────────────────────────
 
 def _quota_footer(telegram_id: str) -> str:
@@ -1288,7 +1261,6 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("dev", enable_dev))
     application.add_handler(CommandHandler("nodev", disable_dev))
     application.add_handler(CommandHandler("setdonate", set_donation_link))
-    application.add_handler(CommandHandler("link", link))
     application.add_handler(CommandHandler("admin", admin_cmd))
     application.add_handler(CommandHandler("analyse", analyse_cmd))
     application.add_handler(CommandHandler("analyze", analyse_cmd))  # both spellings

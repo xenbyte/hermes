@@ -8,25 +8,24 @@ This file is the single source of truth for AI-assisted development on this proj
 
 Hermes is a Dutch rental listing aggregator. It scrapes 20+ rental websites every 5 minutes, sends Telegram notifications for new listings that match each subscriber's filters, and optionally enriches listings with Claude AI analysis (scoring, trade-offs, motivation letters).
 
-Fork of [wtfloris/hestia](https://github.com/wtfloris/hestia), extended with AI enrichment, a web dashboard, and an access approval system.
+Fork of [wtfloris/hestia](https://github.com/wtfloris/hestia), extended with AI enrichment and an access approval system.
 
 ---
 
 ## Architecture
 
-Five application images plus PostgreSQL, one shared database (`hermes` schema). Run locally with **Docker Compose** (`docker/`) or on-cluster with **Kubernetes** (`k8s/hermes/`).
+Four application images plus PostgreSQL, one shared database (`hermes` schema). Run locally with **Docker Compose** (`docker/`) or on-cluster with **Kubernetes** (`k8s/hermes/`).
 
 | Service | Source | Purpose |
 |---|---|---|
 | `hermes-bot` | `hermes/bot.py` | Long-polling Telegram bot; handles all user commands and callbacks |
 | `hermes-scraper` | `hermes/scraper.py` | Cron every 5 min; scrapes targets, writes `homes`, broadcasts to subscribers |
 | `hermes-analyzer` | `hermes/enrichment/analyzer.py` | Cron every N hours; drains enrichment queue, calls Claude, sends enriched messages |
-| `hermes-web` | `web/hermes_web/app.py` | Flask dashboard; filter management, magic-link email auth (Compose: port 19191; container listens on 5050) |
 | `hermes-database` | PostgreSQL | All persistent state (Compose prod: `postgres:15`; dev override: `postgres:16`) |
 
 **Docker Compose:** services write logs to `docker/data/hermes.log` (mounted as `/data/hermes.log` inside containers).
 
-**Kubernetes:** images are `ghcr.io/xenbyte/hermes-{bot,scraper,analyzer,web}:latest`, built and pushed on every push to `master` (see `.github/workflows/build.yml`). Namespace `hermes`. Manifests:
+**Kubernetes:** images are `ghcr.io/xenbyte/hermes-{bot,scraper,analyzer}:latest`, built and pushed on every push to `master` (see `.github/workflows/build.yml`). Namespace `hermes`. Manifests:
 
 | Manifest | Kind | Notes |
 |---|---|---|
@@ -34,9 +33,8 @@ Five application images plus PostgreSQL, one shared database (`hermes` schema). 
 | `configmap.yaml` | ConfigMap | `hermes-init-sql` — bootstrap SQL (keep in sync with `docker/init-db/01-init.sql` when schema changes) |
 | `postgres.yaml` | StatefulSet + Service | `postgres:15`, PVC `local-path` 10Gi, service `hermes-database:5432` |
 | `bot.yaml` / `scraper.yaml` / `analyzer.yaml` | Deployment | `secrets.py` from Secret `hermes-secrets-py`; `/data` as `emptyDir` |
-| `web.yaml` | Deployment + Service + Ingress | Service port 80 → 5050; Ingress host `hermes.xenbyte.dev` (nginx, cert-manager `letsencrypt-prod`) |
 
-**K8s secrets (not in repo):** create at least `hermes-env` (keys used by manifests include `POSTGRES_PASSWORD`, `LOG_LEVEL`, `ANTHROPIC_API_KEY`, `ENRICHMENT_INTERVAL_HOURS`; web uses `envFrom` so it needs the same vars as `docker/.env` for Flask/email), `hermes-secrets-py` (file key `secrets.py`), and `ghcr-pull-secret` for private GHCR pulls if required.
+**K8s secrets (not in repo):** create at least `hermes-env` (keys used by manifests include `POSTGRES_PASSWORD`, `LOG_LEVEL`, `ANTHROPIC_API_KEY`, `ENRICHMENT_INTERVAL_HOURS`), `hermes-secrets-py` (file key `secrets.py`), and `ghcr-pull-secret` for private GHCR pulls if required.
 
 ---
 
@@ -65,12 +63,6 @@ hermes/
 │   │   ├── letters.py          # generate_letter() via Claude Sonnet, with cache
 │   │   └── costs.py            # log_usage(), check_daily_budget(), get_daily_spend()
 │   └── requirements.txt
-├── web/
-│   ├── hermes_web/app.py       # Flask app
-│   ├── Dockerfile              # Image for hermes-web (GHCR / K8s)
-│   ├── templates/              # Jinja2 HTML templates
-│   ├── static/                 # CSS/JS assets
-│   └── requirements.txt
 ├── docker/
 │   ├── docker-compose.yml      # Production stack
 │   ├── docker-compose-dev.yml  # Dev overrides
@@ -82,7 +74,7 @@ hermes/
 │   ├── namespace.yaml
 │   ├── configmap.yaml          # hermes-init-sql (duplicate of init SQL for K8s)
 │   ├── postgres.yaml
-│   ├── bot.yaml / scraper.yaml / analyzer.yaml / web.yaml
+│   ├── bot.yaml / scraper.yaml / analyzer.yaml
 ├── .github/workflows/
 │   ├── ci.yml                  # PR: tests + encrypted-SQL check
 │   └── build.yml               # push to master: build/push GHCR images
@@ -95,7 +87,6 @@ hermes/
 │   ├── test_scraper.py
 │   ├── test_meta.py
 │   └── test_strings.py
-├── web/tests/test_app.py
 ├── misc/
 │   ├── hermes.ddl              # Full DB schema DDL
 │   ├── sql/                    # Migration scripts (must be encrypted as .sql.enc)
@@ -118,9 +109,6 @@ All tables in the `hermes` schema. Core tables:
 | `subscribers` | `telegram_id`, `email_address`, `user_level` (0=user, 9=admin), `approved`, `filter_*`, `lang` |
 | `targets` | `agency`, `queryurl`, `method`, `post_data`, `headers`, `enabled` |
 | `meta` | `devmode_enabled`, `scraper_halted`, `workdir`, `donation_link` |
-| `preview_cache` | `url`, `status`, `image_url`, `expires_at` |
-| `magic_tokens` | `token_id`, `email_address`, `expires_at` |
-| `link_codes` | `code`, `email_address`, `expires_at` |
 | `error_rollups` | `day`, `fingerprint`, `component`, `agency`, `error_class`, `count` |
 | `user_profiles` | `telegram_id`, `full_name`, `max_rent`, `target_cities`, `employer`, `gross_monthly_income`, … |
 | `enrichment_queue` | `id` (sha256 url), `profile_id`, `url`, `status` (pending/processing/done/failed) |
@@ -137,10 +125,6 @@ All tables in the `hermes` schema. Core tables:
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude API key — required for analyzer service |
 | `DATABASE_URL` | PostgreSQL DSN — default: `postgresql://hermes:hermes@hermes-database:5432/hermes` (K8s: same host `hermes-database` in-namespace) |
-| `SECRET_KEY` | Flask session secret — must be changed in production |
-| `BREVO_API_KEY` | Email service for web dashboard magic links (optional) |
-| `FROM_EMAIL` | Sender email address |
-| `BASE_URL` | Public URL of web dashboard |
 | `ENRICHMENT_INTERVAL_HOURS` | How often analyzer runs (default: 4) |
 | `LOG_LEVEL` | Logging level: DEBUG / INFO / WARNING / ERROR (default: INFO) |
 
@@ -234,7 +218,6 @@ Unless explicitly asked:
 - `broadcast()` in `scraper.py` — existing subscriber notification pipeline
 - Existing subscriber filter system (price, city, agency, sqm)
 - Existing bot commands and their behavior
-- Web app (`web/`) unless the task is specifically web-related
 - `hermes_utils/secrets.py` structure
 
 ---
