@@ -509,13 +509,17 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
             await loading_msg.edit_text(reply + footer, parse_mode="MarkdownV2", disable_web_page_preview=True)
         except Exception as e:
             logger.error("on_demand analysis callback failed: %r", e)
-            retry_kb = telegram.InlineKeyboardMarkup([[
-                telegram.InlineKeyboardButton("🔄 Try Again", callback_data=f"analyse:{url_hash}")
+            # Restore the Analyse button on the original notification so the user can retry
+            analyse_kb = telegram.InlineKeyboardMarkup([[
+                telegram.InlineKeyboardButton("🔍 Analyse this listing", callback_data=f"analyse:{url_hash}")
             ]])
+            try:
+                await query.message.edit_reply_markup(analyse_kb)
+            except Exception:
+                pass
             await loading_msg.edit_text(
-                "❌ Something went wrong running the analysis\\.",
+                "❌ Analysis failed\\. Tap the button on the listing to try again\\.",
                 parse_mode="MarkdownV2",
-                reply_markup=retry_kb,
             )
 
     # Admin panel callbacks
