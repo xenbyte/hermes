@@ -483,40 +483,62 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
     # On-demand listing analysis
     elif query.data.startswith("analyse:"):
         url_hash = query.data.split(":", 1)[1]
+        telegram_id = str(query.message.chat.id)
+        listing_msg_id = query.message.message_id
+        chat_id = query.message.chat.id
+
+        from enrichment.on_demand import get_cached_reply, run_on_demand_analysis
+        from enrichment.profile import get_profile_for_telegram_id
+
+        viewed_kb = telegram.InlineKeyboardMarkup([[
+            telegram.InlineKeyboardButton("📄 View previous analysis", callback_data=f"analyse:{url_hash}")
+        ]])
+
+        # Cache hit — reply instantly with the stored analysis, no Claude call
+        profile = get_profile_for_telegram_id(telegram_id)
+        cached = get_cached_reply(url_hash, profile["id"]) if profile else None
+        if cached:
+            await query.answer("Showing previous analysis")
+            footer = _quota_footer(telegram_id)
+            await meta.BOT.send_message(
+                chat_id=chat_id,
+                text=cached + footer,
+                parse_mode="MarkdownV2",
+                disable_web_page_preview=True,
+                reply_to_message_id=listing_msg_id,
+            )
+            try:
+                await query.message.edit_reply_markup(viewed_kb)
+            except Exception:
+                pass
+            return
+
         await query.answer()
-
-        # Disable the button immediately so it can't be double-tapped
-        try:
-            await query.edit_message_reply_markup(None)
-        except Exception:
-            pass
-
-        loading_msg = await query.message.reply_text(
-            "⚡ *Analysis in progress*\n\n"
-            "🌐 Fetching listing details\n"
-            "🤖 Consulting the AI\n"
-            "📊 Building your report\n\n"
-            "_Hang tight — this takes about 15 seconds…_",
+        loading_msg = await meta.BOT.send_message(
+            chat_id=chat_id,
+            text=(
+                "⚡ *Analysis in progress*\n\n"
+                "🌐 Fetching listing details\n"
+                "🤖 Consulting the AI\n"
+                "📊 Building your report\n\n"
+                "_Hang tight — this takes about 15 seconds…_"
+            ),
             parse_mode="MarkdownV2",
+            reply_to_message_id=listing_msg_id,
         )
 
         try:
-            from enrichment.on_demand import run_on_demand_analysis
             reply = await asyncio.to_thread(
-                run_on_demand_analysis, url_hash, str(query.message.chat.id)
+                run_on_demand_analysis, url_hash, telegram_id
             )
-            footer = _quota_footer(str(query.message.chat.id))
+            footer = _quota_footer(telegram_id)
             await loading_msg.edit_text(reply + footer, parse_mode="MarkdownV2", disable_web_page_preview=True)
-        except Exception as e:
-            logger.error("on_demand analysis callback failed: %r", e)
-            # Restore the Analyse button on the original notification so the user can retry
-            analyse_kb = telegram.InlineKeyboardMarkup([[
-                telegram.InlineKeyboardButton("🔍 Analyse this listing", callback_data=f"analyse:{url_hash}")
-            ]])
             try:
-                await query.message.edit_reply_markup(analyse_kb)
+                await query.message.edit_reply_markup(viewed_kb)
             except Exception:
                 pass
+        except Exception as e:
+            logger.error("on_demand analysis callback failed: %r", e)
             await loading_msg.edit_text(
                 "❌ Analysis failed\\. Tap the button on the listing to try again\\.",
                 parse_mode="MarkdownV2",
