@@ -224,8 +224,19 @@ def _run_core(home: dict, profile: dict, telegram_id: str) -> str:
         logger.info("on_demand: cache hit url_hash=%s profile_id=%s", url_hash, profile_id)
         return cached
 
-    # Daily limit check
+    # Access gate
     limit = db.get_analysis_limit(int(telegram_id))
+    if limit == 0:
+        state = db.get_ai_access_state(int(telegram_id))
+        if state == "pending":
+            return (
+                "⏳ Your AI access request is still pending\\. "
+                "You'll get a message here once an admin reviews it\\."
+            )
+        return (
+            "🔒 AI analysis is not enabled for your account\\.\n"
+            "Send /request\\_ai to ask an admin for access\\."
+        )
     if limit != -1:
         used = db.get_daily_analysis_count(profile_id)
         if used >= limit:

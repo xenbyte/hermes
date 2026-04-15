@@ -544,6 +544,60 @@ async def callback_query_handler(update: telegram.Update, _) -> None:
                 parse_mode="MarkdownV2",
             )
 
+    # AI access request — admin approve/deny
+    elif query.data.startswith("airq:"):
+        if not _admin_is_admin(query.message.chat.id):
+            await query.answer("Not authorized.", show_alert=True)
+            return
+        _, action, target_tid = query.data.split(":", 2)
+        state = db.get_ai_access_state(int(target_tid))
+        if state != "pending":
+            await query.answer("Already handled.", show_alert=False)
+            try:
+                await query.edit_message_reply_markup(None)
+            except Exception:
+                pass
+            return
+
+        admin_name = query.from_user.first_name if query.from_user else "an admin"
+        if action == "a":
+            db.grant_ai_access(int(target_tid))
+            verdict = "✅ Approved"
+            user_msg = (
+                "🎉 *AI access granted\\!*\n"
+                "You can now tap 🔍 on listings or use /analyse \\<url\\>\\."
+            )
+        elif action == "d":
+            db.deny_ai_access(int(target_tid))
+            verdict = "❌ Denied"
+            user_msg = (
+                "Your AI access request was declined\\. "
+                "You can still receive listing notifications as usual\\."
+            )
+        else:
+            await query.answer()
+            return
+
+        await query.answer(verdict)
+        try:
+            await query.edit_message_text(
+                query.message.text_markdown + f"\n\n*{verdict}* by {admin_name}",
+                parse_mode="Markdown",
+            )
+        except Exception:
+            try:
+                await query.edit_message_reply_markup(None)
+            except Exception:
+                pass
+        try:
+            await context.bot.send_message(
+                chat_id=target_tid, text=user_msg, parse_mode="MarkdownV2",
+            )
+        except Exception as e:
+            logger.warning("Failed to DM user %s after AI decision: %r", target_tid, e)
+        logger.info("AI access %s for telegram_id=%s by admin=%s",
+                    "granted" if action == "a" else "denied", target_tid, query.message.chat.id)
+
     # Admin panel callbacks
     elif query.data.startswith("admin:"):
         if not _admin_is_admin(query.message.chat.id):
@@ -1108,6 +1162,81 @@ async def analyse_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYP
         )
 
 
+# ─── /request-ai ──────────────────────────────────────────────────────────────
+
+def _format_identity(tid: str, username: str | None, first_name: str | None) -> str:
+    parts = []
+    if username:
+        parts.append(f"@{username}")
+    if first_name:
+        parts.append(first_name)
+    parts.append(f"`{tid}`")
+    return "  ·  ".join(parts)
+
+
+async def _notify_admins_of_ai_request(
+    context: ContextTypes.DEFAULT_TYPE,
+    requester_tid: str,
+    username: str | None,
+    first_name: str | None,
+) -> None:
+    identity = _format_identity(requester_tid, username, first_name)
+    text = (
+        "*🤖 AI access request*\n\n"
+        f"From: {identity}\n\n"
+        "Approve to grant the default daily analysis quota, or deny to reject."
+    )
+    kb = telegram.InlineKeyboardMarkup([[
+        telegram.InlineKeyboardButton("✅ Approve", callback_data=f"airq:a:{requester_tid}"),
+        telegram.InlineKeyboardButton("❌ Deny",    callback_data=f"airq:d:{requester_tid}"),
+    ]])
+    admins = db.fetch_all(
+        "SELECT telegram_id FROM hermes.subscribers "
+        "WHERE user_level = 9 AND telegram_enabled = true"
+    )
+    for a in admins:
+        try:
+            await context.bot.send_message(
+                chat_id=a["telegram_id"], text=text, parse_mode="Markdown", reply_markup=kb,
+            )
+        except Exception as e:
+            logger.warning("Failed to notify admin %s of AI request: %r", a["telegram_id"], e)
+
+
+@requires_approval
+async def request_ai_cmd(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.message:
+        return
+    tid = str(update.effective_chat.id)
+    state = db.get_ai_access_state(int(tid))
+
+    if state == "granted":
+        await update.message.reply_text(
+            "✅ You already have AI access\\. Use /analyse or tap 🔍 on a listing\\.",
+            parse_mode="MarkdownV2",
+        )
+        return
+    if state == "pending":
+        await update.message.reply_text(
+            "⏳ Your request is already pending — an admin will review it soon\\.",
+            parse_mode="MarkdownV2",
+        )
+        return
+
+    db.request_ai_access(int(tid))
+    user = update.effective_user
+    await _notify_admins_of_ai_request(
+        context, tid,
+        user.username if user else None,
+        user.first_name if user else None,
+    )
+    await update.message.reply_text(
+        "📨 Request sent\\. An admin will review it and you'll get a reply here\\.",
+        parse_mode="MarkdownV2",
+    )
+    logger.info("AI access requested by telegram_id=%s", tid)
+
+
 # ─── Admin panel ──────────────────────────────────────────────────────────────
 
 _ADMIN_PAGE_SIZE = 8
@@ -1129,8 +1258,11 @@ def _admin_users_page(page: int) -> tuple[str, telegram.InlineKeyboardMarkup]:
     chunk = users[start:start + _ADMIN_PAGE_SIZE]
 
     default_str = "∞" if global_default == -1 else str(global_default)
+    pending = db.get_pending_ai_requests()
     lines = [f"*Users* ({total} total) · default: {default_str}/day\n"]
     buttons = []
+    if pending:
+        lines.append(f"🤖 *{len(pending)} pending AI access request(s)* — see DMs to approve/deny")
     for u in chunk:
         tid = str(u["telegram_id"])
         limit = u["daily_analysis_limit"]
@@ -1290,6 +1422,8 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("admin", admin_cmd))
     application.add_handler(CommandHandler("analyse", analyse_cmd))
     application.add_handler(CommandHandler("analyze", analyse_cmd))  # both spellings
+    application.add_handler(CommandHandler("request_ai", request_ai_cmd))
+    application.add_handler(CommandHandler("requestai",  request_ai_cmd))
     application.add_handler(ConversationHandler(
         entry_points=[CommandHandler("profile", profile_cmd)],
         states={

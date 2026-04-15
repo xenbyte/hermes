@@ -312,7 +312,8 @@ Je kunt ook elke woning direct analyseren:
 /profile setup — AI profile for scoring & motivation letters
 /filter — Set city, price range and size filters
 
-*🔍 Analysing listings*
+*🔍 Analysing listings* \(requires AI access\)
+/request\_ai — Request AI access from an admin
 /analyse <url> — Analyse any rental listing directly
 Tap *🔍 Analyse* on any notification for an instant AI report
 
@@ -335,7 +336,8 @@ Tap *🔍 Analyse* on any notification for an instant AI report
 /profile setup — AI\-profiel voor scores en motivatiebrieven
 /filter — Stel stad, prijsrange en oppervlakte in
 
-*🔍 Woningen analyseren*
+*🔍 Woningen analyseren* \(AI\-toegang vereist\)
+/request\_ai — Vraag AI\-toegang aan een admin
 /analyse <url> — Analyseer elke huurwoning direct
 Tap *🔍 Analyseer* op een melding voor een direct AI\-rapport
 

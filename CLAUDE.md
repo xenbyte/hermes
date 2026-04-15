@@ -106,7 +106,7 @@ All tables in the `hermes` schema. Core tables:
 | Table | Key Columns |
 |---|---|
 | `homes` | `url`, `address`, `city`, `price`, `sqm`, `agency`, `date_added` |
-| `subscribers` | `telegram_id`, `email_address`, `user_level` (0=user, 9=admin), `approved`, `filter_*`, `lang` |
+| `subscribers` | `telegram_id`, `email_address`, `user_level` (0=user, 9=admin), `approved`, `daily_analysis_limit` (0=no AI, >0 quota, -1=∞), `ai_access_requested_at`, `filter_*`, `lang` |
 | `targets` | `agency`, `queryurl`, `method`, `post_data`, `headers`, `enabled` |
 | `meta` | `devmode_enabled`, `scraper_halted`, `workdir`, `donation_link` |
 | `error_rollups` | `day`, `fingerprint`, `component`, `agency`, `error_class`, `count` |
@@ -175,6 +175,10 @@ kubectl -n hermes logs -f deployment/hermes-scraper
 python hermes/cli.py list
 python hermes/cli.py promote <telegram_id>   # grant unlimited AI analyses
 python hermes/cli.py ban <telegram_id>        # remove user
+
+# AI access: new users start with 0 AI analyses. They ask with /request_ai,
+# which DMs admins a message with inline Approve/Deny buttons. Source of truth
+# is subscribers.daily_analysis_limit (0 = no access, >0 quota, -1 = unlimited).
 ```
 
 ---

@@ -201,7 +201,9 @@ async def broadcast(homes: list[Home]) -> None:
                 message += f"🏢 [{meta.escape_markdownv2(agency_name)}]({home.url})"
 
                 agency_config = db.get_agency_detail_config(home.agency)
-                if agency_config["ai_analysis_enabled"]:
+                # Only show Analyse button when the agency supports it AND the user has AI access.
+                user_has_ai = (sub.get("daily_analysis_limit") or 0) != 0
+                if agency_config["ai_analysis_enabled"] and user_has_ai:
                     keyboard = InlineKeyboardMarkup([[
                         InlineKeyboardButton("🔍 Analyse this listing", callback_data=f"analyse:{url_hash}"),
                     ]])

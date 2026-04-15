@@ -128,12 +128,70 @@ def get_daily_analysis_count(profile_id: int) -> int:
 
 
 def get_analysis_limit(telegram_id: int) -> int:
-    """-1 means unlimited."""
+    """0 = no access, -1 = unlimited, >0 = daily quota."""
     result = fetch_one(
         "SELECT daily_analysis_limit FROM hermes.subscribers WHERE telegram_id = %s",
         [str(telegram_id)],
     )
-    return int(result.get("daily_analysis_limit", 3)) if result else 3
+    return int(result.get("daily_analysis_limit", 0)) if result else 0
+
+
+def get_ai_access_state(telegram_id: int) -> str:
+    """Returns 'granted' (limit != 0), 'pending' (limit=0, request on file), or 'none'."""
+    row = fetch_one(
+        "SELECT daily_analysis_limit, ai_access_requested_at "
+        "FROM hermes.subscribers WHERE telegram_id = %s",
+        [str(telegram_id)],
+    )
+    if not row:
+        return "none"
+    if int(row.get("daily_analysis_limit") or 0) != 0:
+        return "granted"
+    return "pending" if row.get("ai_access_requested_at") else "none"
+
+
+def request_ai_access(telegram_id: int) -> None:
+    """Record a pending AI access request. Only touches state when limit=0 and no pending."""
+    _write(
+        "UPDATE hermes.subscribers "
+        "SET ai_access_requested_at = now() "
+        "WHERE telegram_id = %s "
+        "  AND daily_analysis_limit = 0 "
+        "  AND ai_access_requested_at IS NULL",
+        [str(telegram_id)],
+    )
+
+
+def grant_ai_access(telegram_id: int, limit: int | None = None) -> None:
+    """Approve access. If limit is None, uses the configured default (or 3 if default is 0)."""
+    if limit is None:
+        default = get_default_analysis_limit()
+        limit = default if default != 0 else 3
+    _write(
+        "UPDATE hermes.subscribers "
+        "SET daily_analysis_limit = %s, ai_access_requested_at = NULL "
+        "WHERE telegram_id = %s",
+        [limit, str(telegram_id)],
+    )
+
+
+def deny_ai_access(telegram_id: int) -> None:
+    """Clear a pending request without granting access."""
+    _write(
+        "UPDATE hermes.subscribers "
+        "SET ai_access_requested_at = NULL "
+        "WHERE telegram_id = %s",
+        [str(telegram_id)],
+    )
+
+
+def get_pending_ai_requests() -> list:
+    return fetch_all(
+        "SELECT telegram_id, tg_username, tg_first_name, ai_access_requested_at "
+        "FROM hermes.subscribers "
+        "WHERE daily_analysis_limit = 0 AND ai_access_requested_at IS NOT NULL "
+        "ORDER BY ai_access_requested_at"
+    )
 
 
 def promote_user(telegram_id: int) -> None:
