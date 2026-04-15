@@ -3,6 +3,7 @@
 AGENTS.md
 misc/maintenance.py
 misc/sql/*.sql
+misc/cluster-backup/
 !misc/sql/*.sql.enc
 !misc/sql/README.md
 
