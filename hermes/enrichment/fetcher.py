@@ -117,11 +117,166 @@ def _fetch_playwright(url: str) -> FetchResult:
         pw.stop()
 
 
+def _fetch_athomevastgoed_detail(url: str) -> FetchResult:
+    """Agency-specific extractor for At Home Vastgoed detail pages.
+
+    These pages are a Vue SPA: the server returns a 1MB+ HTML skeleton
+    where virtually all visible content is populated by JS from inline
+    Vuex data — ``soup.get_text()`` yields only the navigation (~136
+    chars). The generic ``_extract_content`` path therefore returns
+    nothing and falls through to Playwright (which isn't in the image).
+
+    Instead we pull from the two places the data actually lives:
+      (a) ``description_trans`` JSON (inline script) for the full
+          English description, price, area, rooms, available-from.
+      (b) ``.appointments-widget`` HTML block (which *is* in the DOM)
+          for viewing-slot status.
+
+    This mirrors the index-page strategy in ``HomeResults.parse_athomevastgoed``
+    and is far more robust than pretending the page is normal HTML.
+    """
+    if not HAS_CURL_CFFI:
+        raise RuntimeError("curl-cffi not available for athomevastgoed")
+
+    r = cf_requests.get(
+        url,
+        impersonate="chrome124",
+        timeout=25,
+        headers={
+            "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+    )
+    r.raise_for_status()
+    html = r.text
+
+    import re
+    import json as _json
+    import html as _html_mod
+
+    parts: list[str] = [f"URL: {url}"]
+
+    # --- English description from the inline Vuex payload ---
+    # Shape: ..."description_trans":{"en":"<p>...</p><p>...</p>","nl":"..."}...
+    # Greedy match fails (description contains escaped quotes); walk until we
+    # hit the end of the English value by tracking escape state.
+    marker = '"description_trans":{"en":"'
+    idx = html.find(marker)
+    if idx >= 0:
+        start = idx + len(marker)
+        i = start
+        escape = False
+        while i < len(html):
+            c = html[i]
+            if escape:
+                escape = False
+            elif c == "\\":
+                escape = True
+            elif c == '"':
+                break
+            i += 1
+        raw = html[start:i]
+        # Unescape JSON escapes and strip HTML
+        try:
+            decoded = _json.loads('"' + raw + '"')
+        except Exception:
+            decoded = raw
+        decoded = re.sub(r"<br\s*/?>", "\n", decoded, flags=re.I)
+        decoded = re.sub(r"</p\s*>", "\n\n", decoded, flags=re.I)
+        decoded = re.sub(r"<[^>]+>", " ", decoded)
+        decoded = _html_mod.unescape(decoded).strip()
+        if decoded:
+            parts.append(f"Description:\n{decoded}")
+
+    # --- Structured facts from the inline property JSON ---
+    # Keys we care about, each matched individually so partial malformations
+    # don't nuke the whole block.
+    # Two shapes: quoted string value (may contain commas, e.g. "1185,00")
+    # or unquoted numeric/boolean (e.g. 65, true, null).
+    def _grab(key: str) -> str | None:
+        # Quoted value, allow commas inside.
+        m = re.search(rf'"{re.escape(key)}"\s*:\s*"([^"]*)"', html)
+        if m:
+            return m.group(1).strip() or None
+        # Unquoted value up to next comma/brace.
+        m = re.search(rf'"{re.escape(key)}"\s*:\s*([^,}}\s]+)', html)
+        if m:
+            val = m.group(1).strip()
+            return val if val and val != "null" else None
+        return None
+
+    facts: list[str] = []
+    for label, key in [
+        ("Street", "street"),
+        ("Postcode", "postcode"),
+        ("Price (€/month)", "ah_price"),
+        ("Area (m²)", "area"),
+        ("Bedrooms", "no_bedrooms"),
+        ("Available from", "available_on"),
+    ]:
+        val = _grab(key)
+        if val:
+            facts.append(f"{label}: {val}")
+    if facts:
+        parts.append("Listing facts:\n" + "\n".join(facts))
+
+    # --- Appointments widget (real DOM; a small, well-formed block) ---
+    # Simpler than regex-matching nested divs: split the page on the item
+    # marker and parse each chunk until we hit the first widget-level close.
+    item_marker = '<div class="appointments-widget__item">'
+    first_widget_idx = html.find('<div class="appointments-widget">')
+    if first_widget_idx >= 0:
+        widget_region = html[first_widget_idx : first_widget_idx + 50000]
+        chunks = widget_region.split(item_marker)[1:]  # drop the header
+        appt_lines: list[str] = []
+        for chunk in chunks:
+            # Each item ends at the item's own closing </div>; stop before
+            # anything that belongs to the next item or the widget footer.
+            end_idx = chunk.find(item_marker)
+            if end_idx >= 0:
+                chunk = chunk[:end_idx]
+            # Also cap at the reservelist widget if we overran.
+            for stop in ['<div class="viewing-widget"', '<!--']:
+                si = chunk.find(stop)
+                if si >= 0:
+                    chunk = chunk[:si]
+
+            dt = re.search(r"<dd[^>]*>\s*<strong>([^<]+)(?:<br[^>]*>\s*([^<]+))?", chunk)
+            status_m = re.search(
+                r'<span class="text-(red|green|gray)[^"]*"[^>]*><strong>([^<]+)</strong>',
+                chunk,
+            )
+            date = dt.group(1).strip() if dt else "?"
+            time_s = (dt.group(2) or "").strip() if dt else ""
+            status = status_m.group(2).strip() if status_m else "Open"
+            appt_lines.append(f"  - {date} {time_s} [{status}]")
+        if appt_lines:
+            parts.append("Appointments:\n" + "\n".join(appt_lines))
+
+    text = "\n\n".join(parts)
+    logger.debug("athomevastgoed detail extractor produced %d chars", len(text))
+    return FetchResult(text=text, screenshot_b64=None, method="athomevastgoed_custom")
+
+
 def fetch_detail_page(url: str, agency: str, method: str = "http") -> FetchResult:
     """Tiered fetch routed by detail_fetch_method from the targets table.
 
     method values: 'cf' | 'playwright' | 'http' (default)
+
+    Some agencies are Vue/React SPAs where the page text is effectively empty
+    at the DOM level (content is materialized from inline data by JS). For
+    those, we dispatch to a site-specific extractor that knows where to
+    look — much cheaper than headless Chromium.
     """
+    if agency == "athomevastgoed":
+        logger.debug("fetch_detail_page: using athomevastgoed-specific extractor for %s", url)
+        try:
+            return _fetch_athomevastgoed_detail(url)
+        except Exception as e:
+            logger.info("fetch_detail_page: athomevastgoed extractor failed: %r — falling back to generic path", e)
+            # Fall through to the generic tiered logic so a bug here doesn't
+            # take analysis offline for the agency.
+
     if method == "cf":
         logger.debug("fetch_detail_page: agency '%s' → CF bypass for %s", agency, url)
         try:

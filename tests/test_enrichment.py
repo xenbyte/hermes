@@ -351,3 +351,109 @@ class TestEnrichedMessage:
         await _send_low_score_summary("12345", [])
 
         mock_send.assert_not_called()
+
+
+class TestFetchAthomevastgoedDetail:
+    """Site-specific detail extractor. Input is raw HTML (curl_cffi is
+    injected via monkeypatch); output is a text block suitable for Claude."""
+
+    _SAMPLE_HTML = (
+        '<html><body>'
+        '<nav>All Properties</nav>'
+        # Inline Vuex-style payload; keys we care about.
+        '<script>'
+        'window.app.data = {};'
+        'var prop = {"id":6290,"street":"Sonmansstraat","postcode":"3024CV",'
+        '"location":{"name":"Rotterdam"},'
+        '"ah_price":"1185,00","area":65,"no_bedrooms":2,'
+        '"available_on":"01 May 2026",'
+        '"description_trans":{'
+        '"en":"<p>For rent<\\/p><p>Spacious 3-room apartment with garden.<\\/p>",'
+        '"nl":"<p>Te huur<\\/p>"'
+        '}};'
+        '</script>'
+        # Real DOM appointments widget — 1 full, 1 open.
+        '<div class="appointments-widget">'
+        '  <div class="appointments-widget__list">'
+        '    <div class="appointments-widget__item">'
+        '      <dd><strong>25-04-2026<br>10:00</strong></dd>'
+        '      <span class="text-red-600"><strong>Appointment full</strong></span>'
+        '    </div>'
+        '    <div class="appointments-widget__item">'
+        '      <dd><strong>26-04-2026<br>14:00</strong></dd>'
+        '    </div>'
+        '  </div>'
+        '</div>'
+        '<div class="viewing-widget">reserve list</div>'
+        '</body></html>'
+    )
+
+    def _patch_cf(self, monkeypatch, html: str = None, raise_exc: Exception = None):
+        """Replace curl_cffi.requests.get inside the fetcher module."""
+        from enrichment import fetcher
+
+        class FakeResp:
+            def __init__(self, t):
+                self.text = t
+            def raise_for_status(self):
+                pass
+
+        def fake_get(url, **kw):
+            if raise_exc is not None:
+                raise raise_exc
+            return FakeResp(html)
+
+        fake_cf = type("FakeCF", (), {"get": staticmethod(fake_get)})
+        monkeypatch.setattr(fetcher, "cf_requests", fake_cf, raising=False)
+        monkeypatch.setattr(fetcher, "HAS_CURL_CFFI", True, raising=False)
+
+    def test_extracts_description_and_facts(self, monkeypatch):
+        self._patch_cf(monkeypatch, html=self._SAMPLE_HTML)
+        from enrichment.fetcher import _fetch_athomevastgoed_detail
+        r = _fetch_athomevastgoed_detail("https://example.test/rent-1")
+        assert r.method == "athomevastgoed_custom"
+        assert "Spacious 3-room apartment with garden." in r.text
+        assert "Street: Sonmansstraat" in r.text
+        assert "Price (€/month): 1185,00" in r.text
+        assert "Area (m²): 65" in r.text
+        assert "Bedrooms: 2" in r.text
+        assert "Available from: 01 May 2026" in r.text
+
+    def test_extracts_appointments(self, monkeypatch):
+        self._patch_cf(monkeypatch, html=self._SAMPLE_HTML)
+        from enrichment.fetcher import _fetch_athomevastgoed_detail
+        r = _fetch_athomevastgoed_detail("https://example.test/rent-1")
+        assert "Appointments:" in r.text
+        assert "25-04-2026 10:00 [Appointment full]" in r.text
+        assert "26-04-2026 14:00 [Open]" in r.text
+
+    def test_missing_description_block_is_tolerated(self, monkeypatch):
+        html = '<html><body><div class="appointments-widget"></div></body></html>'
+        self._patch_cf(monkeypatch, html=html)
+        from enrichment.fetcher import _fetch_athomevastgoed_detail
+        r = _fetch_athomevastgoed_detail("https://example.test/empty")
+        # No exception, just a sparse output with the URL only.
+        assert "URL: https://example.test/empty" in r.text
+        assert "Description" not in r.text
+
+    def test_fetch_detail_page_dispatches_to_athomevastgoed(self, monkeypatch):
+        self._patch_cf(monkeypatch, html=self._SAMPLE_HTML)
+        from enrichment.fetcher import fetch_detail_page
+        r = fetch_detail_page("https://example.test/x", "athomevastgoed", "cf")
+        assert r.method == "athomevastgoed_custom"
+        assert "Sonmansstraat" in r.text
+
+    def test_fetch_detail_page_falls_through_on_extractor_error(self, monkeypatch):
+        # Force the site-specific path to raise; generic path should take
+        # over. Since curl_cffi (generic _fetch_cf) also uses our fake,
+        # it should succeed — but produce the generic _extract_content
+        # method tag, not the site-specific one.
+        self._patch_cf(monkeypatch, raise_exc=RuntimeError("boom"))
+        from enrichment import fetcher
+        from enrichment.fetcher import fetch_detail_page
+        # Point _fetch_cf at a minimal HTML so the fallback doesn't also blow up.
+        monkeypatch.setattr(fetcher, "_fetch_cf", lambda u: fetcher.FetchResult(
+            text="x" * 400, screenshot_b64=None, method="cf_get",
+        ))
+        r = fetch_detail_page("https://example.test/x", "athomevastgoed", "cf")
+        assert r.method == "cf_get"

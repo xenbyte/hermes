@@ -252,9 +252,13 @@ def _run_core(home: dict, profile: dict, telegram_id: str) -> str:
     agency = home.get("agency", "")
     agency_config = db.get_agency_detail_config(agency)
     if not agency_config["ai_analysis_enabled"]:
+        supported = db.fetch_all(
+            "SELECT agency FROM hermes.targets WHERE enabled = true AND ai_analysis_enabled = true ORDER BY agency"
+        )
+        supported_names = ", ".join(r["agency"] for r in supported) or "none"
         return (
             f"❌ AI analysis is not supported for *{_esc(agency)}* listings yet\\.\n"
-            "Only Pararius is currently supported\\."
+            f"Currently supported: *{_esc(supported_names)}*\\."
         )
 
     # Fetch detail page
