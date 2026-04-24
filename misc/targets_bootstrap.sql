@@ -31,6 +31,20 @@ VALUES (
   true
 );
 
+-- At Home Vastgoed sits behind Cloudflare; use curl_cffi (CF_GET) with a
+-- Chrome TLS fingerprint. Listings are not in the DOM but embedded as a
+-- Vuex SET_PROPERTIES_COLLECTION JSON commit (see parse_athomevastgoed).
+INSERT INTO hermes.targets (agency, queryurl, method, user_info, post_data, headers, enabled)
+VALUES (
+  'athomevastgoed',
+  'https://www.athomevastgoed.nl/en/rental-listing?ray=20&order=latest_desc',
+  'CF_GET',
+  '{"agency": "At Home Vastgoed", "website": "https://www.athomevastgoed.nl"}',
+  '{}',
+  '{"Accept-Language":"nl-NL,nl;q=0.9,en;q=0.8","Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}',
+  true
+);
+
 INSERT INTO hermes.targets (agency, queryurl, method, user_info, post_data, headers, enabled)
 VALUES (
   'vanderlinden',

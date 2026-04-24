@@ -212,6 +212,10 @@ When updating Claude model identifiers, use the latest available:
 - **SQL migrations:** New SQL files go in `misc/sql/` and must be encrypted with sops before committing (`*.sql.enc`). The CI/CD pipeline enforces this.
 - **Secrets:** Never hardcode credentials. `secrets.py` is gitignored. Use environment variables for Docker services.
 
+- **Per-agency detail annotations:** The `Home` class carries an optional `appointments: dict | None` field for site-specific detail-page metadata. Populate it from a per-agency hook in `scrape_site()` that runs AFTER dedup, so only newly-seen listings trigger detail fetches. Current example: `annotate_athomevastgoed_new_homes()` in `hermes_utils/parser.py`. The broadcast() message reads this generically — no agency-specific code in broadcast itself.
+
+- **Enabled scrapers (production):** `pararius`, `athomevastgoed`. Many other parsers exist in `HomeResults` but their `targets.enabled` rows are false.
+
 ---
 
 ## What NOT to Touch

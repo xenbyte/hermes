@@ -15,7 +15,7 @@ import hermes_utils.db as db
 import hermes_utils.meta as meta
 import hermes_utils.secrets as secrets
 import hermes_utils.apns as apns
-from hermes_utils.parser import Home, HomeResults
+from hermes_utils.parser import Home, HomeResults, annotate_athomevastgoed_new_homes
 from hermes_utils.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -197,6 +197,19 @@ async def broadcast(homes: list[Home]) -> None:
 
                 message = f"{meta.HOUSE_EMOJI} {home.address}, {home.city}\n\n"
                 message += price_line + "\n"
+
+                # Surface per-listing viewing-slot availability when a parser
+                # has populated it (currently only athomevastgoed).
+                appt = getattr(home, "appointments", None)
+                if appt:
+                    total = int(appt.get("total") or 0)
+                    open_ = int(appt.get("open") or 0)
+                    if total > 0:
+                        if appt.get("has_free"):
+                            message += f"\U0001f7e2 Free viewing slots: {open_}/{total}\n"
+                        else:
+                            message += f"\U0001f534 All viewing slots booked ({total})\n"
+
                 message = meta.escape_markdownv2(message)
                 message += f"🏢 [{meta.escape_markdownv2(agency_name)}]({home.url})"
 
@@ -296,6 +309,14 @@ async def scrape_site(target: dict) -> None:
                 new_homes.append(home)
 
         logger.info("[%s] Found %d new homes (of %d total parsed)", target["agency"], len(new_homes), len(new_homes) + len(prev_homes))
+
+        # Per-agency post-parse annotation. Keeps HomeResults.parse_* methods
+        # cheap (they only see the index response) while still enabling
+        # detail-page-derived fields (e.g. athomevastgoed viewing-slot status)
+        # on the small subset of truly-new listings per cycle.
+        if target["agency"] == "athomevastgoed":
+            annotate_athomevastgoed_new_homes(new_homes)
+
         for home in new_homes:
             logger.debug("[%s] New: %s, %s - €%d", target["agency"], home.address, home.city, home.price)
             db.add_home(home.url,

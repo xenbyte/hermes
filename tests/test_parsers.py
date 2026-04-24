@@ -1,6 +1,11 @@
 import json
 import pytest
-from hermes_utils.parser import Home, HomeResults
+from hermes_utils.parser import (
+    Home,
+    HomeResults,
+    annotate_athomevastgoed_new_homes,
+    parse_athomevastgoed_appointments,
+)
 
 
 class TestHomeResultsUnknownSource:
@@ -648,6 +653,248 @@ class TestParsePararius:
         r = mock_response(html)
         results = HomeResults("pararius", r)
         assert len(results.homes) == 0
+
+
+class TestParseAthomevastgoed:
+    """athomevastgoed listings page embeds the listing collection as a Vuex
+    store commit. The parser extracts that JSON and maps to Home objects."""
+
+    def _make_index_html(self, listings):
+        """Wrap a listings list in the SET_PROPERTIES_COLLECTION Vuex commit
+        shape. The real page inlines this inside a <script>; the parser only
+        cares about the marker + JSON payload, so plain concatenation is fine."""
+        payload = {
+            "current_page": 1,
+            "data": listings,
+            "per_page": 12,
+            "total": len(listings),
+            "last_page": 1,
+        }
+        return (
+            "<html><head></head><body><script>\n"
+            "window.app.$store.commit('SET_PROPERTIES_COLLECTION', "
+            + json.dumps(payload)
+            + ")\n</script></body></html>"
+        )
+
+    def _listing(
+        self,
+        id_=3853,
+        street="Willem van Hillegaersbergstraat",
+        city="Rotterdam",
+        price="1100,00",
+        area=56,
+        url="https://www.athomevastgoed.nl/en/rental-listing/rent-apartment-rotterdam-willem-van-hillegaersbergstraat-for-rent-3853",
+    ):
+        return {
+            "id": id_,
+            "street": street,
+            "location": {"name": city, "country": "Nederland"},
+            "ah_price": price,
+            "area": area,
+            "no_bedrooms": 1,
+            "available_from": "2026-05-01T00:00:00.000000Z",
+            "url": url,
+        }
+
+    def test_basic_parsing(self, mock_response):
+        html = self._make_index_html([self._listing()])
+        r = mock_response(html)
+        results = HomeResults("athomevastgoed", r)
+        assert len(results.homes) == 1
+        h = results[0]
+        assert h.agency == "athomevastgoed"
+        assert h.city == "Rotterdam"
+        assert h.price == 1100
+        assert h.sqm == 56
+        assert h.url.endswith("for-rent-3853")
+        # No house number in the source: parser appends [€price] for dedup.
+        assert h.address == "Willem van Hillegaersbergstraat [€1100]"
+        # Appointments only populated by the post-parse hook, not the parser.
+        assert h.appointments is None
+
+    def test_multiple_listings(self, mock_response):
+        html = self._make_index_html([
+            self._listing(id_=1, street="A-straat", price="950,00", area=42,
+                          url="https://www.athomevastgoed.nl/en/rental-listing/rent-a-1"),
+            self._listing(id_=2, street="B-straat", price="1500,00", area=80,
+                          url="https://www.athomevastgoed.nl/en/rental-listing/rent-b-2"),
+        ])
+        r = mock_response(html)
+        results = HomeResults("athomevastgoed", r)
+        assert len(results.homes) == 2
+        assert results[0].price == 950 and results[0].sqm == 42
+        assert results[1].price == 1500 and results[1].sqm == 80
+
+    def test_skips_listings_missing_required_fields(self, mock_response):
+        listings = [
+            self._listing(id_=1),  # valid
+            {"id": 2, "street": "X", "location": {"name": "Rotterdam"}, "ah_price": "", "url": "u"},  # empty price
+            {"id": 3, "street": "X", "location": {"name": ""}, "ah_price": "1000,00", "url": "u"},  # empty city
+            {"id": 4, "street": "", "location": {"name": "Rotterdam"}, "ah_price": "1000,00", "url": "u"},  # empty street
+            {"id": 5, "street": "X", "location": {"name": "Rotterdam"}, "ah_price": "1000,00", "url": ""},  # empty url
+        ]
+        r = mock_response(self._make_index_html(listings))
+        results = HomeResults("athomevastgoed", r)
+        assert len(results.homes) == 1  # only the valid one
+
+    def test_handles_missing_payload_gracefully(self, mock_response):
+        r = mock_response("<html><body>no vuex commit here</body></html>")
+        results = HomeResults("athomevastgoed", r)
+        assert len(results.homes) == 0
+
+    def test_area_zero_or_missing_leaves_sqm_default(self, mock_response):
+        listings = [
+            self._listing(id_=1, area=0),
+            {
+                **self._listing(id_=2),
+                "area": None,
+            },
+        ]
+        r = mock_response(self._make_index_html(listings))
+        results = HomeResults("athomevastgoed", r)
+        assert len(results.homes) == 2
+        assert results[0].sqm == -1
+        assert results[1].sqm == -1
+
+    def test_price_parsing_handles_dutch_decimal(self, mock_response):
+        listings = [
+            self._listing(id_=1, price="1.500,00"),  # Dutch grouping + decimal
+            self._listing(id_=2, price="950"),        # bare integer
+        ]
+        r = mock_response(self._make_index_html(listings))
+        results = HomeResults("athomevastgoed", r)
+        assert results[0].price == 1500
+        assert results[1].price == 950
+
+
+class TestAthomevastgoedAppointments:
+    """Appointment-widget parser — used by the per-agency annotation hook."""
+
+    def _widget(self, items_html: str) -> str:
+        return (
+            '<html><body>'
+            '<div class="appointments-widget">'
+            '  <div class="appointments-widget__list">'
+            f'  {items_html}'
+            '  </div>'
+            '</div>'
+            '</body></html>'
+        )
+
+    def _full_item(self, date="25-04-2026", time="10:00"):
+        return (
+            '<div class="appointments-widget__item">'
+            '  <dl class="appointments-widget__item-info">'
+            f'   <dd><strong>{date}<br>{time}</strong></dd>'
+            '  </dl>'
+            '  <span class="text-red-600"><strong>Appointment full</strong></span>'
+            '</div>'
+        )
+
+    def _free_item(self, date="26-04-2026", time="14:00"):
+        # Free-slot template: no "Appointment full" string, typically a button
+        # to register. The parser only checks for absence of the full-marker.
+        return (
+            '<div class="appointments-widget__item">'
+            '  <dl class="appointments-widget__item-info">'
+            f'   <dd><strong>{date}<br>{time}</strong></dd>'
+            '  </dl>'
+            '  <button class="theme-btn theme-btn--primary">Register for viewing</button>'
+            '</div>'
+        )
+
+    def test_no_widget_returns_none(self):
+        assert parse_athomevastgoed_appointments("<html><body>no widget</body></html>") is None
+
+    def test_all_slots_full(self):
+        html = self._widget(self._full_item() + self._full_item("25-04-2026", "10:15") + self._full_item("25-04-2026", "10:30"))
+        result = parse_athomevastgoed_appointments(html)
+        assert result == {"has_free": False, "open": 0, "total": 3}
+
+    def test_mix_of_full_and_free(self):
+        html = self._widget(self._full_item() + self._free_item() + self._full_item("25-04-2026", "10:30"))
+        result = parse_athomevastgoed_appointments(html)
+        assert result == {"has_free": True, "open": 1, "total": 3}
+
+    def test_all_free(self):
+        html = self._widget(self._free_item() + self._free_item("26-04-2026", "14:15"))
+        result = parse_athomevastgoed_appointments(html)
+        assert result == {"has_free": True, "open": 2, "total": 2}
+
+    def test_empty_widget(self):
+        html = self._widget("")
+        assert parse_athomevastgoed_appointments(html) == {"has_free": False, "open": 0, "total": 0}
+
+    def test_dutch_copy_marks_slots_full(self):
+        # Defensive: Dutch copy on .nl variant of the page.
+        html = self._widget(
+            '<div class="appointments-widget__item">'
+            '<dd><strong>25-04-2026<br>10:00</strong></dd>'
+            '<span class="text-red-600"><strong>Afspraak vol</strong></span>'
+            '</div>'
+        )
+        result = parse_athomevastgoed_appointments(html)
+        assert result == {"has_free": False, "open": 0, "total": 1}
+
+
+class TestAnnotateAthomevastgoedNewHomes:
+    """Post-parse hook called by scraper.py for newly-seen athomevastgoed
+    listings only. Network I/O is injected via the `fetch` kwarg for testability."""
+
+    def test_annotates_matching_homes(self):
+        home = Home(
+            address="A [€1000]",
+            city="Rotterdam",
+            url="https://www.athomevastgoed.nl/en/rental-listing/rent-1",
+            agency="athomevastgoed",
+            price=1000,
+        )
+        fake_html = (
+            '<div class="appointments-widget">'
+            '<div class="appointments-widget__list">'
+            '<div class="appointments-widget__item">'
+            '<dd><strong>25-04-2026<br>10:00</strong></dd>'
+            '<span class="text-red-600"><strong>Appointment full</strong></span>'
+            '</div>'
+            '</div></div>'
+        )
+        calls = []
+
+        def fake_fetch(url):
+            calls.append(url)
+            return fake_html
+
+        annotate_athomevastgoed_new_homes([home], fetch=fake_fetch)
+        assert calls == [home.url]
+        assert home.appointments == {"has_free": False, "open": 0, "total": 1}
+
+    def test_skips_non_athomevastgoed(self):
+        home = Home(
+            address="B 10", city="Amsterdam",
+            url="https://www.pararius.com/x", agency="pararius", price=1500,
+        )
+        called = []
+        annotate_athomevastgoed_new_homes([home], fetch=lambda u: called.append(u) or "")
+        assert called == []
+        assert home.appointments is None
+
+    def test_fetch_error_leaves_appointments_none(self):
+        home = Home(
+            address="A [€1000]", city="Rotterdam",
+            url="https://www.athomevastgoed.nl/en/rental-listing/rent-1",
+            agency="athomevastgoed", price=1000,
+        )
+
+        def bad_fetch(url):
+            raise RuntimeError("network down")
+
+        annotate_athomevastgoed_new_homes([home], fetch=bad_fetch)
+        assert home.appointments is None  # failure is swallowed
+
+    def test_empty_new_homes_is_noop(self):
+        # Should not raise even if curl_cffi is absent — short-circuits before fetch.
+        annotate_athomevastgoed_new_homes([])
 
 
 class TestParseFunda:

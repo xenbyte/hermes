@@ -11,13 +11,27 @@ logger = logging.getLogger(__name__)
 
 
 class Home:
-    def __init__(self, address: str = '', city: str = '', url: str = '', agency: str = '', price: int = -1, sqm: int = -1):
+    def __init__(
+        self,
+        address: str = '',
+        city: str = '',
+        url: str = '',
+        agency: str = '',
+        price: int = -1,
+        sqm: int = -1,
+        appointments: dict | None = None,
+    ):
         self.address = address
         self.city = city
         self.url = url
         self.agency = agency
         self.price = price
         self.sqm = sqm
+        # Optional per-agency detail-page metadata. Populated after scrape by
+        # per-agency annotation hooks (e.g. athomevastgoed viewing-slot status).
+        # Default is None so no existing parser or consumer is affected.
+        # Expected shape when set: {"has_free": bool, "open": int, "total": int}.
+        self.appointments: dict | None = appointments
         
     def __repr__(self) -> str:
         return str(self)
@@ -109,6 +123,8 @@ class HomeResults:
             self.parse_woningnet_dak(raw, source.split("_")[1])
         elif source == "pararius":
             self.parse_pararius(raw)
+        elif source == "athomevastgoed":
+            self.parse_athomevastgoed(raw)
         elif source == "funda":
             self.parse_funda(raw)
         elif source == "rebo":
@@ -475,7 +491,89 @@ class HomeResults:
                     home.sqm = int(sqm_match.group(1))
 
             self.homes.append(home)
-            
+
+    def parse_athomevastgoed(self, r: requests.models.Response):
+        """Parse the At Home Vastgoed listings index.
+
+        Strategy: the listings page is a Laravel + jQuery SPA behind Cloudflare.
+        Cloudflare is bypassed via the scraper's ``CF_GET`` method (curl_cffi with
+        a Chrome TLS fingerprint). The rendered HTML does NOT contain anchor
+        elements for individual listings — instead the full listing collection
+        is embedded as a Vuex store commit:
+
+            window.app.$store.commit('SET_PROPERTIES_COLLECTION', { ... })
+
+        The payload is a page of 12 listings with fields we care about:
+        ``id``, ``street``, ``location.name`` (city), ``postcode``, ``area``
+        (m²), ``ah_price`` (Dutch-decimal string, e.g. ``"1100,00"``),
+        ``no_bedrooms``, ``available_from``, ``url``.
+
+        Parsing the JSON directly is far cleaner (and more resilient) than
+        scraping DOM selectors, so that's what we do here.
+        """
+        payload_text = _extract_athomevastgoed_properties_json(
+            r.content.decode("utf-8", errors="replace") if isinstance(r.content, (bytes, bytearray)) else str(r.content)
+        )
+        if payload_text is None:
+            logger.warning("[athomevastgoed] SET_PROPERTIES_COLLECTION payload not found in response")
+            return
+
+        try:
+            data = chompjs.parse_js_object(payload_text)
+        except Exception as e:
+            logger.warning("[athomevastgoed] failed to parse Vuex payload: %r", e)
+            return
+
+        listings = data.get("data", []) if isinstance(data, dict) else []
+        for res in listings:
+            try:
+                street = (res.get("street") or "").strip()
+                location = res.get("location") or {}
+                city_raw = (location.get("name") or "").strip()
+                if not street or not city_raw:
+                    continue
+
+                price_str = res.get("ah_price")
+                if not price_str:
+                    continue
+                # Dutch decimal: "1100,00" → 1100 (drop cents via int())
+                try:
+                    price_int = int(float(str(price_str).replace(".", "").replace(",", ".")))
+                except (TypeError, ValueError):
+                    continue
+                if price_int <= 0:
+                    continue
+
+                url = (res.get("url") or "").strip()
+                if not url:
+                    continue
+
+                home = Home(agency="athomevastgoed")
+                home.city = city_raw
+                home.price = price_int
+                home.url = url
+
+                # Index JSON never includes a house number, and there can be
+                # multiple listings on the same street. Follow the Pararius
+                # convention of appending "[€price]" to keep the dedup key
+                # (address+city) unique across concurrent listings.
+                home.address = f"{street} [€{price_int}]"
+
+                # Area (m²); some listings omit or set to 0.
+                area = res.get("area")
+                if area is not None:
+                    try:
+                        sqm_i = int(float(area))
+                        if 0 < sqm_i < 2000:
+                            home.sqm = sqm_i
+                    except (TypeError, ValueError):
+                        pass
+
+                self.homes.append(home)
+            except Exception as e:
+                logger.debug("[athomevastgoed] skipping malformed listing %r: %r", res.get("id"), e)
+                continue
+
     def parse_funda(self, r: requests.models.Response):
         results = json.loads(r.content)["responses"][0]["hits"]["hits"]
         
@@ -1362,3 +1460,141 @@ class HomeResults:
                         continue
 
                     add_home(address, city, link.get("href", ""), price_match.group(1), card_text)
+
+
+# ---------------------------------------------------------------------------
+# athomevastgoed helpers
+# ---------------------------------------------------------------------------
+
+# Separated from the HomeResults class because the JSON-extract logic is shared
+# between index parsing (listings-page Vuex payload) and detail parsing
+# (per-listing appointment widget).
+
+_ATHOME_PROPERTIES_COMMIT = "SET_PROPERTIES_COLLECTION"
+
+
+def _extract_athomevastgoed_properties_json(html: str) -> str | None:
+    """Extract the JSON argument passed to the SET_PROPERTIES_COLLECTION Vuex commit.
+
+    The blob is embedded in an inline <script> and is 800KB+ with nested
+    descriptions containing escaped braces, so we can't use a lazy regex.
+    Instead: locate the start of the payload's opening ``{`` and walk forward
+    with a brace counter that respects strings / escapes.
+    """
+    marker = _ATHOME_PROPERTIES_COMMIT + "'"
+    idx = html.find(marker)
+    if idx < 0:
+        marker = _ATHOME_PROPERTIES_COMMIT + "\""
+        idx = html.find(marker)
+        if idx < 0:
+            return None
+
+    # Skip past the commit name and the following comma/whitespace to the '{'
+    brace_start = html.find("{", idx)
+    if brace_start < 0:
+        return None
+
+    depth = 0
+    in_string = False
+    string_quote = ""
+    escape = False
+    i = brace_start
+    while i < len(html):
+        c = html[i]
+        if escape:
+            escape = False
+        elif in_string:
+            if c == "\\":
+                escape = True
+            elif c == string_quote:
+                in_string = False
+        else:
+            if c == '"' or c == "'":
+                in_string = True
+                string_quote = c
+            elif c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    return html[brace_start : i + 1]
+        i += 1
+    return None
+
+
+def parse_athomevastgoed_appointments(html: str) -> dict | None:
+    """Parse the viewing-appointment widget on an athomevastgoed detail page.
+
+    Returns a summary dict ``{"has_free": bool, "open": int, "total": int}`` or
+    ``None`` if no appointments widget is present on the page.
+
+    Full slots are marked with a ``<span class="text-red-600">...Appointment full</span>``
+    element inside each ``.appointments-widget__item``. Any item without the
+    phrase "Appointment full" is treated as open. Two identical widgets (one
+    desktop, one mobile) are rendered on the page — we deduplicate by looking
+    at the first widget only.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    widget = soup.select_one(".appointments-widget")
+    if widget is None:
+        return None
+
+    items = widget.select(".appointments-widget__item")
+    total = len(items)
+    if total == 0:
+        return {"has_free": False, "open": 0, "total": 0}
+
+    full = 0
+    for item in items:
+        text = item.get_text(" ", strip=True)
+        if "Appointment full" in text or "Afspraak vol" in text:
+            full += 1
+    open_slots = total - full
+    return {"has_free": open_slots > 0, "open": open_slots, "total": total}
+
+
+def annotate_athomevastgoed_new_homes(new_homes, fetch=None) -> None:
+    """Populate ``Home.appointments`` for each newly-seen athomevastgoed listing.
+
+    Called from scraper.py after dedup so we only hit the network for listings
+    that are actually new (typically 0–3 per 5-minute cycle). Uses curl_cffi
+    with a Chrome TLS fingerprint to pass Cloudflare, matching the index
+    fetch strategy.
+
+    The ``fetch`` parameter is injectable for testing; when ``None`` we
+    lazy-import curl_cffi so test environments that don't run the scraper are
+    not forced to install it.
+    """
+    if not new_homes:
+        return
+
+    if fetch is None:
+        try:
+            from curl_cffi import requests as cf_requests
+        except ImportError:
+            logger.warning("[athomevastgoed] curl_cffi not available — skipping appointment annotation")
+            return
+
+        def fetch(url: str) -> str:
+            resp = cf_requests.get(
+                url,
+                impersonate="chrome124",
+                timeout=25,
+                headers={
+                    "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                },
+            )
+            resp.raise_for_status()
+            return resp.text
+
+    for home in new_homes:
+        if home.agency != "athomevastgoed" or not home.url:
+            continue
+        try:
+            html = fetch(home.url)
+            home.appointments = parse_athomevastgoed_appointments(html)
+        except Exception as e:
+            # Never block the broadcast pipeline on appointment extraction.
+            logger.info("[athomevastgoed] appointment fetch failed for %s: %r", home.url, e)
+            home.appointments = None
