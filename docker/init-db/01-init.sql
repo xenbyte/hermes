@@ -85,7 +85,9 @@ CREATE TABLE IF NOT EXISTS hermes.targets (
   user_info jsonb NOT NULL,
   post_data jsonb DEFAULT '{}'::json NOT NULL,
   headers json DEFAULT '{}'::json NOT NULL,
-  enabled bool DEFAULT false NOT NULL
+  enabled bool DEFAULT false NOT NULL,
+  scrape_interval_minutes integer NOT NULL DEFAULT 5,
+  last_scraped_at timestamptz
 );
 
 CREATE TABLE IF NOT EXISTS hermes.error_rollups (

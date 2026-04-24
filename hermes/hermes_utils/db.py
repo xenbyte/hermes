@@ -398,6 +398,16 @@ def get_enabled_targets_without_recent_homes(days: int = 7) -> list[RealDictRow]
         [days],
     )
 
+def mark_target_scraped(target_id: int) -> None:
+    """Record an attempted scrape against a target.
+
+    Called from scraper.main() after every scrape attempt (success or failure)
+    so the per-target ``scrape_interval_minutes`` gate works correctly — a
+    broken target shouldn't hammer itself every 5 minutes.
+    """
+    _write("UPDATE hermes.targets SET last_scraped_at = now() WHERE id = %s", [target_id])
+
+
 def approve_user(telegram_id: int) -> None:
     _write("UPDATE hermes.subscribers SET approved = true WHERE telegram_id = %s", [str(telegram_id)])
 

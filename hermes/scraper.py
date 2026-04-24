@@ -96,6 +96,29 @@ async def _record_target_error(target: dict, exc: BaseException) -> None:
             await meta.BOT.send_message(text=fallback_error, chat_id=admin["telegram_id"])
 
 
+def _target_should_scrape(target: dict, now: datetime | None = None) -> bool:
+    """Return True if this target is due for a scrape, False if it should be
+    skipped this cycle per its ``scrape_interval_minutes``.
+
+    Pure function: no DB or clock side effects beyond `datetime.now()`. A
+    30-second tolerance absorbs cron jitter so a run that lands 1–2 seconds
+    late doesn't push the whole schedule forward.
+    """
+    interval = target.get("scrape_interval_minutes")
+    if interval is None:
+        interval = 5
+    if interval <= 0:
+        # Treat 0/negative as "always scrape" — useful as a temporary
+        # override without touching code.
+        return True
+    last = target.get("last_scraped_at")
+    if last is None:
+        return True
+    now = now or datetime.now(last.tzinfo)
+    elapsed_minutes = (now - last).total_seconds() / 60.0
+    return elapsed_minutes >= interval - 0.5
+
+
 async def main() -> None:
     
     # Once a day at exactly 19:00 UTC, check some stuff and send an alert if necessary
@@ -150,15 +173,41 @@ Good luck in your search\!"""
         scrape_start_ts = datetime.now()
         targets = db.fetch_all("SELECT * FROM hermes.targets WHERE enabled = true")
         logger.info("Starting scrape run for %d targets", len(targets))
+        skipped = 0
+        attempted = 0
         for target in targets:
+            # Per-target rate limit. `scrape_interval_minutes` defaults to 5
+            # (the cron cadence) so existing targets are unaffected. A target
+            # with e.g. interval=15 is skipped for 2 of every 3 cron ticks.
+            if not _target_should_scrape(target):
+                logger.debug(
+                    "[%s] skipping: interval=%d not yet elapsed since %s",
+                    target["agency"], target.get("scrape_interval_minutes") or 5,
+                    target.get("last_scraped_at"),
+                )
+                skipped += 1
+                continue
+
+            attempted += 1
             try:
                 await scrape_site(target)
             except BaseException as e:
                 error = f"[{target['agency']} ({target['id']})] {repr(e)}"
                 logger.error(error)
                 await _record_target_error(target, e)
+            finally:
+                # Record the attempt even on failure so a broken target
+                # doesn't hammer itself every cycle.
+                try:
+                    db.mark_target_scraped(int(target["id"]))
+                except Exception as e:
+                    logger.warning("mark_target_scraped failed for %s: %r", target.get("agency"), e)
+
         scrape_duration = datetime.now() - scrape_start_ts
-        logger.info("Scrape completed in %.1f seconds", scrape_duration.total_seconds())
+        logger.info(
+            "Scrape completed in %.1f seconds (attempted %d, skipped %d)",
+            scrape_duration.total_seconds(), attempted, skipped,
+        )
     else:
         logger.info("Scraper is halted, skipping run")
 

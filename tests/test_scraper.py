@@ -1,8 +1,85 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from hermes_utils.parser import Home
+
+
+class TestTargetShouldScrape:
+    """Per-target rate limit gate. Keeps existing behavior (interval=5, the
+    cron cadence) for all targets and lets Cloudflare-protected sites throttle
+    themselves down."""
+
+    def _target(self, **overrides):
+        base = {
+            "id": 1,
+            "agency": "test",
+            "scrape_interval_minutes": 5,
+            "last_scraped_at": None,
+        }
+        base.update(overrides)
+        return base
+
+    def test_never_scraped_runs(self):
+        from scraper import _target_should_scrape
+        assert _target_should_scrape(self._target()) is True
+
+    def test_interval_not_elapsed_skips(self):
+        from scraper import _target_should_scrape
+        now = datetime(2026, 4, 24, 12, 0, 0, tzinfo=timezone.utc)
+        # Last scraped 10 minutes ago, interval = 15 → should skip.
+        last = now - timedelta(minutes=10)
+        assert _target_should_scrape(
+            self._target(scrape_interval_minutes=15, last_scraped_at=last),
+            now=now,
+        ) is False
+
+    def test_interval_elapsed_runs(self):
+        from scraper import _target_should_scrape
+        now = datetime(2026, 4, 24, 12, 0, 0, tzinfo=timezone.utc)
+        # Last scraped 16 minutes ago, interval = 15 → should run.
+        last = now - timedelta(minutes=16)
+        assert _target_should_scrape(
+            self._target(scrape_interval_minutes=15, last_scraped_at=last),
+            now=now,
+        ) is True
+
+    def test_jitter_tolerance_within_30s(self):
+        """If the cron tick lands e.g. 2 seconds early (ran at 4min 58s vs the
+        5-min mark), we still run — otherwise the cadence slips by 5 min."""
+        from scraper import _target_should_scrape
+        now = datetime(2026, 4, 24, 12, 0, 0, tzinfo=timezone.utc)
+        last = now - timedelta(minutes=4, seconds=45)  # 15s shy of 5-min
+        assert _target_should_scrape(
+            self._target(scrape_interval_minutes=5, last_scraped_at=last),
+            now=now,
+        ) is True
+
+    def test_zero_interval_always_runs(self):
+        """A temporary override to ignore the gate entirely."""
+        from scraper import _target_should_scrape
+        now = datetime(2026, 4, 24, 12, 0, 0, tzinfo=timezone.utc)
+        last = now - timedelta(seconds=1)
+        assert _target_should_scrape(
+            self._target(scrape_interval_minutes=0, last_scraped_at=last),
+            now=now,
+        ) is True
+
+    def test_missing_interval_defaults_to_5(self):
+        """Pre-migration rows without the column → fall back to cron cadence."""
+        from scraper import _target_should_scrape
+        now = datetime(2026, 4, 24, 12, 0, 0, tzinfo=timezone.utc)
+        last = now - timedelta(minutes=2)
+        # 2 min elapsed, default interval 5 → skip
+        assert _target_should_scrape(
+            {"id": 1, "agency": "t", "last_scraped_at": last},
+            now=now,
+        ) is False
+        # 6 min elapsed → run
+        assert _target_should_scrape(
+            {"id": 1, "agency": "t", "last_scraped_at": now - timedelta(minutes=6)},
+            now=now,
+        ) is True
 
 
 class TestScrapeSite:
