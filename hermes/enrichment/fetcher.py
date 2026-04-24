@@ -224,9 +224,15 @@ def _fetch_athomevastgoed_detail(url: str) -> FetchResult:
     # Simpler than regex-matching nested divs: split the page on the item
     # marker and parse each chunk until we hit the first widget-level close.
     item_marker = '<div class="appointments-widget__item">'
-    first_widget_idx = html.find('<div class="appointments-widget">')
+    widget_marker = '<div class="appointments-widget">'
+    first_widget_idx = html.find(widget_marker)
     if first_widget_idx >= 0:
-        widget_region = html[first_widget_idx : first_widget_idx + 50000]
+        # The page renders the widget twice (desktop + mobile) with identical
+        # items; clip the region to the FIRST widget only to avoid duplicate
+        # slot lines in the output Claude sees.
+        second_widget_idx = html.find(widget_marker, first_widget_idx + len(widget_marker))
+        end_idx = second_widget_idx if second_widget_idx > 0 else first_widget_idx + 50000
+        widget_region = html[first_widget_idx:end_idx]
         chunks = widget_region.split(item_marker)[1:]  # drop the header
         appt_lines: list[str] = []
         for chunk in chunks:
